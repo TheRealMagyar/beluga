@@ -26,7 +26,7 @@ Because memory lives on Walrus and is keyed to your account and project (not to 
 ## Quick Start
 
 1. **Install Beluga** using one of the [download links](#download) below, or build it from source (see [Custom Installer](#building-a-custom-installer) below).
-2. **Connect or import a Sui wallet.** Any Sui-compatible wallet works (Slush, Suiet, Phantom). Make sure it holds a small amount of SUI — creating a Walrus Memory account is an on-chain transaction.
+2. **Create or import a Sui wallet.** Make sure it holds a small amount of SUI — creating a Walrus Memory account is an on-chain transaction.
 3. **Create or import a Walrus Memory account.** Optionally set a namespace to keep different memories separated (default namespace is `default`).
 4. **Create a project** and attach your Walrus Memory account to it. Beluga scaffolds starter files (`WALRUS.md`, `CLAUDE.md`, `README.md`) automatically.
 5. **Connect your AI agent over MCP** (see below) and start working — try something like *"Open the project and check where we left off."*
@@ -113,13 +113,3 @@ npm run make
 ```
 
 Once the build finishes, the installer will be in the `out/` directory.
-
-## Resources
-
-- [Walrus Playground](https://memory.walrus.xyz)
-- [Sui Explorer](https://suiscan.xyz)
-- [Model Context Protocol Spec](https://modelcontextprotocol.io)
-
-## License
-
-TBD
