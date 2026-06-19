@@ -106,7 +106,7 @@ Beluga exposes its functionality over the [Model Context Protocol](https://model
 If you'd rather build Beluga yourself:
 
 ```bash
-git clone https://github.com/yourusername/beluga.git
+git clone https://github.com/TheRealMagyar/beluga.git
 cd beluga
 npm install
 npm run make
