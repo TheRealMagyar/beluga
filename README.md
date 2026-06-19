@@ -98,8 +98,8 @@ Beluga exposes its functionality over the [Model Context Protocol](https://model
 
 | Platform | Link |
 |---|---|
-| Windows | _coming soon_ |
-| macOS | _coming soon_ |
+| Windows | [Download for Windows](https://github.com/TheRealMagyar/beluga/releases/download/v1.0.0-beta/Beluga-1.0.0.Setup.exe) |
+| macOS | [Download for macOS](https://github.com/TheRealMagyar/beluga/releases/download/v1.0.0-beta/Beluga-darwin-arm64-1.0.0.zip) |
 
 ## Building a Custom Installer
 
