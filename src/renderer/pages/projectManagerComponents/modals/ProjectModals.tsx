@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Project, MemoryFragment } from "../types";
+import { Project, MemoryFragment, ProjectTemplateId } from "../types";
 import { ModalWrapper } from "../ui";
+import { PROJECT_TEMPLATES } from "../../../../helper/project-templates";
 
 // ── NewProjectModal ───────────────────────────────────────────────────────────
 
@@ -15,18 +16,58 @@ export function NewProjectModal({
   actionError: string | null;
   actionLoading: boolean;
   onClose: () => void;
-  onCreate: (name: string, memoryIds: string[]) => void;
+  onCreate: (
+    name: string,
+    template: ProjectTemplateId,
+    memoryIds: string[],
+  ) => void;
 }) {
   const [newName, setNewName] = useState("");
+  const [template, setTemplate] = useState<ProjectTemplateId>("empty");
   const [newProjectMemoryIds, setNewProjectMemoryIds] = useState<string[]>([]);
+  const selectedTemplate = PROJECT_TEMPLATES.find((t) => t.id === template);
 
   return (
-    <ModalWrapper onClose={onClose}>
+    <ModalWrapper onClose={onClose} wide>
       <div className="text-lg font-bold mb-1">✨ New project</div>
       <div className="text-[13px] text-[#8888a0] mb-5">
-        Creates a folder with the default files (README.md, WALRUS.md,
-        CLAUDE.md).
+        Choose a stack and Beluga will scaffold the project folder for you.
       </div>
+
+      <label className="block text-[11px] font-semibold text-[#8888a0] uppercase tracking-wider mb-2">
+        Project template
+      </label>
+      <div className="grid grid-cols-2 gap-2 mb-5">
+        {PROJECT_TEMPLATES.map((item) => {
+          const active = template === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTemplate(item.id)}
+              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-colors cursor-pointer ${
+                active
+                  ? "border-[#4ca3ff]/60 bg-[#4ca3ff]/10"
+                  : "border-[#2a2a2a] bg-[#262626] hover:border-[#4ca3ff]/30"
+              }`}
+            >
+              <div className="flex items-center gap-2 w-full">
+                <span className="text-lg leading-none">{item.icon}</span>
+                <span className="text-[13px] font-semibold text-[#f0f0f5]">
+                  {item.label}
+                </span>
+                {active && (
+                  <span className="ml-auto text-[#4ca3ff] text-xs">✓</span>
+                )}
+              </div>
+              <span className="text-[11px] text-[#8888a0] leading-relaxed">
+                {item.description}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <label className="block text-[11px] font-semibold text-[#8888a0] uppercase tracking-wider mb-1.5">
         Project name
       </label>
@@ -37,7 +78,7 @@ export function NewProjectModal({
           setNewName(e.target.value.replace(/[^a-zA-Z0-9_\-]/g, ""))
         }
         onKeyDown={(e) =>
-          e.key === "Enter" && onCreate(newName, newProjectMemoryIds)
+          e.key === "Enter" && onCreate(newName, template, newProjectMemoryIds)
         }
         placeholder="e.g. my-ai-agent"
         className="w-full bg-[#262626] border border-[#2a2a2a] text-[#f0f0f5] placeholder-[#8888a0]
@@ -45,6 +86,11 @@ export function NewProjectModal({
       />
       <div className="text-[11px] text-[#8888a0] mb-4">
         Letters, numbers, - and _ only
+        {selectedTemplate && (
+          <span className="block mt-1 text-[#4ca3ff]">
+            Stack: {selectedTemplate.label}
+          </span>
+        )}
       </div>
 
       {availableFragments.length > 0 && (
@@ -93,7 +139,7 @@ export function NewProjectModal({
           Cancel
         </button>
         <button
-          onClick={() => onCreate(newName, newProjectMemoryIds)}
+          onClick={() => onCreate(newName, template, newProjectMemoryIds)}
           disabled={!newName.trim() || actionLoading}
           className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-40 transition-opacity hover:opacity-90"
           style={{ background: "linear-gradient(135deg, #4ca3ff, #3a85e0)" }}

@@ -1,6 +1,12 @@
 import { Project, ProjectFile, SelectedProject } from "../types";
-import { MEMORIES_FILE, getLinkedMemoryIds } from "./memory";
-import { DEFAULT_FILES } from "../../../../helper/default-files";
+import { getLinkedMemoryIds } from "./memory";
+import { getLinkedPackageIds } from "./packages";
+import { getLinkedSkillIds } from "./beluga";
+import { BELUGA_JSON } from "./beluga";
+import {
+  getProjectScaffold,
+  type ProjectTemplateId,
+} from "../../../../helper/project-templates";
 
 // ── FS accessor ───────────────────────────────────────────────────────────────
 
@@ -16,7 +22,14 @@ async function collectFilesRecursively(
   const files: ProjectFile[] = [];
 
   for (const entry of entries) {
-    if (entry === MEMORIES_FILE) continue;
+    if (
+      entry === BELUGA_JSON ||
+      entry === ".memories.json" ||
+      entry === ".packages.json" ||
+      entry === ".beluga-project.json"
+    ) {
+      continue;
+    }
     const entryPath = await fs.pathJoin(dirPath, entry);
     const stat = await fs.stat(entryPath);
     if (stat.isDirectory) {
@@ -59,21 +72,45 @@ export async function loadProjects(): Promise<Project[]> {
       createdAt: dirStat.mtime,
       files,
       linkedMemoryIds: await getLinkedMemoryIds(dirPath),
+      linkedPackageIds: await getLinkedPackageIds(dirPath),
+      linkedSkillIds: await getLinkedSkillIds(dirPath),
     });
   }
 
   return projects;
 }
 
-export async function createProject(name: string): Promise<string> {
+async function writeScaffoldFile(
+  fs: ReturnType<typeof getFs>,
+  baseDir: string,
+  relativePath: string,
+  content: string,
+) {
+  const filePath = await fs.pathJoin(baseDir, relativePath);
+  const parts = relativePath.split("/");
+  if (parts.length > 1) {
+    const parent = await fs.pathJoin(baseDir, ...parts.slice(0, -1));
+    await fs.mkdir(parent);
+  }
+  await fs.writeFile(filePath, content);
+}
+
+export async function createProject(
+  name: string,
+  template: ProjectTemplateId = "empty",
+): Promise<string> {
   const fs = getFs();
   const base = await fs.getAppPath();
   const dir = await fs.pathJoin(base, "projects", name);
   await fs.mkdir(dir);
-  for (const f of DEFAULT_FILES) {
-    const fPath = await fs.pathJoin(dir, f.name);
-    await fs.writeFile(fPath, f.content);
+
+  const scaffold = getProjectScaffold(template, name);
+  for (const file of scaffold) {
+    const content =
+      typeof file.content === "function" ? file.content(name) : file.content;
+    await writeScaffoldFile(fs, dir, file.path, content);
   }
+
   return dir;
 }
 

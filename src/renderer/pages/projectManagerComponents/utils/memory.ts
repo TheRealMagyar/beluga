@@ -1,13 +1,19 @@
 import { MemoryFragment, FileTreeNode } from "../types";
+import { BELUGA_JSON } from "./beluga";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+export {
+  getLinkedMemoryIds,
+  saveLinkedMemoryIds,
+} from "./beluga";
 
-export const MEMORIES_FILE = ".memories.json";
 export const MEMORY_ENTRIES_KEY = "memwal-entries-v1";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const getFs = () => (window as any).fs;
+const HIDDEN_PROJECT_FILES = new Set([
+  BELUGA_JSON,
+  ".memories.json",
+  ".packages.json",
+  ".beluga-project.json",
+]);
 
 export function loadMemoryFragments(): MemoryFragment[] {
   if (typeof window === "undefined") return [];
@@ -16,37 +22,25 @@ export function loadMemoryFragments(): MemoryFragment[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((e: any) => ({ id: e.id, label: e.label, network: e.network }));
+    return parsed.map((e: any) => ({
+      id: e.id,
+      label: e.label,
+      network: e.network,
+    }));
   } catch {
     return [];
   }
 }
 
-export async function getLinkedMemoryIds(projectPath: string): Promise<string[]> {
-  const fs = getFs();
-  try {
-    const filePath = await fs.pathJoin(projectPath, MEMORIES_FILE);
-    const content: string | null = await fs.readFile(filePath);
-    if (!content) return [];
-    const parsed = JSON.parse(content);
-    return Array.isArray(parsed?.ids) ? parsed.ids : [];
-  } catch {
-    return [];
-  }
-}
-
-export async function saveLinkedMemoryIds(projectPath: string, ids: string[]): Promise<void> {
-  const fs = getFs();
-  const filePath = await fs.pathJoin(projectPath, MEMORIES_FILE);
-  await fs.writeFile(filePath, JSON.stringify({ ids }, null, 2));
-}
-
-export function filterHiddenMemoryFile(nodes: FileTreeNode[]): FileTreeNode[] {
+export function filterHiddenProjectFiles(nodes: FileTreeNode[]): FileTreeNode[] {
   return nodes
-    .filter((n) => n.name !== MEMORIES_FILE)
+    .filter((n) => !HIDDEN_PROJECT_FILES.has(n.name))
     .map((n) =>
       n.type === "folder" && n.children
-        ? { ...n, children: filterHiddenMemoryFile(n.children) }
-        : n
+        ? { ...n, children: filterHiddenProjectFiles(n.children) }
+        : n,
     );
 }
+
+/** @deprecated Use filterHiddenProjectFiles */
+export const filterHiddenMemoryFile = filterHiddenProjectFiles;

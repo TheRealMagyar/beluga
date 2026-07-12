@@ -1,58 +1,104 @@
-# 🐋 Beluga
+# Beluga
 
-**An AI-native project manager built on Sui — with persistent, on-chain memory for your AI agents.**
+**An AI-native desktop hub for Sui development — projects, persistent agent memory, Move playground, packages, and MCP.**
 
-Beluga lets you connect AI agents (Claude, Cursor, VS Code, and any other MCP-compatible client) directly to projects on your machine. Agents can read and write your project files, and — thanks to [Walrus Memory](https://memory.walrus.xyz) — they never forget the context of a project between sessions. Every decision, fact, and piece of context is stored as an encrypted, vectorized memory on the Walrus network, so a brand-new chat session (or even a completely different AI model) can pick up exactly where the last one left off.
+Beluga is an Electron app that connects your local projects to AI agents through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). Agents can read and write project files, recall context from [Walrus Memory](https://memory.walrus.xyz), build and publish Move packages on localnet, install SDK bundles, run Git operations, and use Beluga's built-in Sui tools — all from one place.
 
-## Overview
+Use Beluga as your daily driver for Sui dApp work, or point Claude Desktop, Cursor, VS Code, or any MCP client at Beluga and let an agent operate the full toolchain.
 
-- **Project management** — create, open, rename, and delete local projects, each with its own file tree.
-- **AI agent access** — any MCP-compatible AI agent can connect to Beluga and read/write files inside your projects.
-- **Persistent memory** — agents store and retrieve context via Walrus Memory, so nothing is lost when a chat ends, the model changes, or you switch machines.
-- **Multiple memories per project** — attach one or several Walrus Memory accounts/namespaces to the same project to organize or combine context.
-- **Built-in Sui wallet** — Beluga ships with an integrated Sui wallet. Today it's used to pay the on-chain fee for creating a Walrus Memory account; going forward, it will let agents generate signatures and interact on-chain directly — handy if you're building dApps.
-- **Sui-first, but not Sui-only** — Beluga is primarily designed for managing Sui projects (dApps, smart contracts), but you can connect and manage any kind of project with it.
+---
 
-## How It Works
+## Features
 
-1. You connect a Sui wallet inside Beluga (or import an existing one).
-2. You create or import a **Walrus Memory** account — an on-chain, encrypted memory store for your AI agent.
-3. You create a **project** and attach one or more Walrus Memory accounts to it.
-4. You point an MCP-compatible AI client (Claude Desktop, Cursor, VS Code, etc.) at Beluga.
-5. The agent calls `recall()` at the start of a session to pull prior context, and `remember()` whenever something worth keeping happens — all transparently, over MCP.
+### Memory
+- Create and manage **Walrus Memory** accounts (mainnet / testnet).
+- Encrypted, vectorized, on-chain memory that survives chat resets and model swaps.
+- `remember`, `recall`, and `analyze` exposed over MCP for agents.
 
-Because memory lives on Walrus and is keyed to your account and project (not to a single chat window), you can swap agents mid-task and the new one will have full context.
+### Projects
+- Local project workspaces with file tree, create / rename / delete.
+- Templates: **Empty**, **Vite + React**, **Next.js**, **Sui Move**.
+- Link **memories**, **npm package bundles**, and **skills** per project via `beluga.json`.
+- Built-in **Git** panel and **GitHub** repo connect / publish flow.
 
-## Quick Start
+### Skills
+- Personal **skills library** — reusable instruction sets for agents.
+- Import from **Beluga templates** and official **Walrus skills**.
+- Attach skills to projects; agents load them through `project_open` and `skill_get`.
 
-1. **Install Beluga** using one of the [download links](#download) below, or build it from source (see [Custom Installer](#building-a-custom-installer) below).
-2. **Create or import a Sui wallet.** Make sure it holds a small amount of SUI — creating a Walrus Memory account is an on-chain transaction.
-3. **Create or import a Walrus Memory account.** Optionally set a namespace to keep different memories separated (default namespace is `default`).
-4. **Create a project** and attach your Walrus Memory account to it. Beluga scaffolds starter files (`WALRUS.md`, `CLAUDE.md`, `README.md`) automatically.
-5. **Connect your AI agent over MCP** (see below) and start working — try something like *"Open the project and check where we left off."*
+### Playground
+- In-app **Move editor** (Monaco) with build, publish, and entry-function testing.
+- **Sui localnet** lifecycle: start, stop, reset, faucet, live logs, local explorer.
+- **Ika** tab: localnet stack, dWallet creation, Ika explorer.
+- Load Move projects from the Projects manager directly into the playground.
 
-> 💡 Tip: Generate a **delegate key** from the Walrus Playground instead of exposing your main wallet key to an agent. Delegate keys are scoped to memory operations only.
+### Packages
+- **SDK Catalog** — curated Sui ecosystem npm packages (wallet, storage, payments, tooling).
+- **Custom Packages** — bundle multiple npm deps into one installable unit; persist, install, link to projects, manage via MCP.
+- **Toolchain** — install and update Rust, `suiup`, Sui CLI, Git (Homebrew on macOS), with Beluga-managed fallback paths when system dirs are not writable.
 
-## Connecting an AI Agent (MCP)
+### Tools
+- **Transaction Visualizer** — address transfer graph.
+- **Token Scanner** — mint authority and risk signals.
+- **RPC Query Builder** — Sui gRPC queries with JSON bodies.
+- **Token Generator** — deploy a custom coin.
+- **NFT Manager** — generative collections, Walrus media upload, contract deploy.
 
-Beluga exposes its functionality over the [Model Context Protocol](https://modelcontextprotocol.io). Currently supported clients:
+### AI Assistant
+- Built-in chat panel (Grok / xAI) with optional **page context** and **tool use** against Beluga's MCP catalog.
+- Same tools external agents use — no duplicate integration work.
 
-| Client | Status |
+### Console
+- Dedicated terminal window (`node-pty`) for CLI workflows alongside the GUI.
+
+### Learning
+- Interactive **Move curriculum** built into the app — from first module to capstone.
+
+### Wallet
+- Integrated Sui wallet (mainnet, testnet, localnet).
+- Pays Walrus Memory account creation; signs playground publishes and tool transactions.
+- MCP wallet tools: balance, faucet, send SUI.
+
+---
+
+## Quick start
+
+### 1. Install
+
+| Platform | Download |
 |---|---|
-| Claude Desktop | ✅ Supported |
-| Cursor / VS Code | ✅ Supported |
-| GPT-4 (OpenAI) | 🔜 Coming soon |
+| Windows | [Beluga Setup (v1.0.0-beta)](https://github.com/TheRealMagyar/beluga/releases/download/v1.0.0-beta/Beluga-1.0.0.Setup.exe) |
+| macOS (Apple Silicon) | [Beluga ZIP (v1.0.0-beta)](https://github.com/TheRealMagyar/beluga/releases/download/v1.0.0-beta/Beluga-darwin-arm64-1.0.0.zip) |
 
-**Claude Desktop** — add this to `claude_desktop_config.json`:
+Or build from source — see [Development](#development) below.
+
+### 2. Set up wallet and memory
+
+1. Open Beluga and **create or import a Sui wallet**. Keep a small amount of SUI for Walrus Memory account creation.
+2. Go to **Memory** and create or import a Walrus Memory account. Use a **delegate key** from the [Walrus Playground](https://memory.walrus.xyz) instead of exposing your main key to agents.
+3. Optionally set a **namespace** per memory (default: `default`).
+
+### 3. Create a project
+
+1. Open **Projects** → **New project**.
+2. Pick a template (e.g. **Smart contracts** for Move).
+3. Link one or more memories, package bundles, and skills.
+4. Beluga writes `beluga.json` and starter files (`WALRUS.md`, `CLAUDE.md`, etc.).
+
+### 4. Connect an AI agent (MCP)
+
+Beluga starts an MCP HTTP server on port **47823** when the app is running. Configure your client to connect via `mcp-remote`:
+
+**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 
 ```json
 {
   "mcpServers": {
-    "walrus-memory": {
+    "beluga": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://0.0.0.0:47823/mcp",
+        "http://127.0.0.1:47823/mcp",
         "--allow-http"
       ]
     }
@@ -60,16 +106,16 @@ Beluga exposes its functionality over the [Model Context Protocol](https://model
 }
 ```
 
-**Cursor / VS Code** — add this to `.cursor/mcp.json` at your project root:
+**Cursor / VS Code** — `.cursor/mcp.json` at your project root (or global MCP config):
 
 ```json
 {
   "mcpServers": {
-    "walrus-memory": {
+    "beluga": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://0.0.0.0:47823/mcp",
+        "http://127.0.0.1:47823/mcp",
         "--allow-http"
       ]
     }
@@ -77,39 +123,257 @@ Beluga exposes its functionality over the [Model Context Protocol](https://model
 }
 ```
 
-### Available MCP Tools
+> Use scoped endpoints (fewer tools, less noise) — see [MCP endpoints](#mcp-endpoints).
+
+Then try: *"Open my project and recall what we decided last session."*
+
+---
+
+## MCP endpoints
+
+| Endpoint | Tools |
+|---|---|
+| `/mcp` | Everything (memory, projects, files, skills, Git, GitHub, playground, packages, app tools, wallet) |
+| `/mcp/core` | Projects, memory, files, skills |
+| `/mcp/playground` | Core + localnet, Move build/publish, Ika / dWallet |
+| `/mcp/packages` | Core + SDK catalog, custom bundles, install/link |
+| `/mcp/tools` | Core + token scanner, NFT/token generator, gRPC, tx visualizer |
+| `/mcp/wallet` | Core + balance, faucet, send |
+
+Example scoped URL: `http://127.0.0.1:47823/mcp/playground`
+
+The exact URL is shown in **Settings → MCP endpoint**.
+
+### MCP tool groups
+
+<details>
+<summary><strong>Core — memory, projects, files, skills</strong></summary>
 
 | Tool | Description |
 |---|---|
-| `project_list` | List all projects (name, path, file count, last modified). |
-| `project_open` | Open a project — returns the file tree and memory credentials. |
-| `project_create` | Create a new project with starter files. |
-| `project_delete` | Delete a project (irreversible). |
-| `project_rename` | Rename a project. |
-| `file_read` / `file_write` / `file_delete` / `file_rename` | Standard file operations inside a project. Writes can auto-trigger recall + remember. |
-| `folder_create` / `folder_delete` / `folder_rename` | Folder operations inside a project. |
-| `remember` | Save text to Walrus Memory as a vector embedding. |
-| `recall` | Semantic search over memory — call at the start of every session. |
-| `analyze` | Extract discrete facts from a longer passage and save each one. |
-| `get_health` | Check relayer connectivity and account status. |
-| `get_account_info` | Return the active wallet address, account ID, and network details. |
+| `get_account_info` | Active wallet, memory account, network |
+| `get_health` | Relayer connectivity and account status |
+| `remember` | Save text to Walrus Memory |
+| `recall` | Semantic search over memory |
+| `analyze` | Extract and store discrete facts |
+| `project_list` / `project_open` / `project_create` / `project_delete` / `project_rename` | Project CRUD |
+| `file_read` / `file_write` / `file_delete` / `file_rename` | File operations (writes can trigger recall + remember) |
+| `folder_create` / `folder_delete` / `folder_rename` | Folder operations |
+| `skill_list` / `skill_get` | List and load agent skills |
 
-## Download
+</details>
 
-| Platform | Link |
+<details>
+<summary><strong>Git & GitHub</strong> (full <code>/mcp</code> only)</summary>
+
+| Tool | Description |
 |---|---|
-| Windows | [Download for Windows](https://github.com/TheRealMagyar/beluga/releases/download/v1.0.0-beta/Beluga-1.0.0.Setup.exe) |
-| macOS | [Download for macOS](https://github.com/TheRealMagyar/beluga/releases/download/v1.0.0-beta/Beluga-darwin-arm64-1.0.0.zip) |
+| `git_status` / `git_init` / `git_add` / `git_commit` | Local Git workflow |
+| `git_push` / `git_pull` / `git_fetch` / `git_branch` / `git_merge` / `git_log` | Remote and history |
+| `github_create_repo` / `github_connect_repo` / `github_set_repo_visibility` / `github_list_repos` | GitHub integration |
 
-## Building a Custom Installer
+</details>
 
-If you'd rather build Beluga yourself:
+<details>
+<summary><strong>Playground</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `playground_get_status` / `playground_get_workspace` / `playground_write_files` | Workspace state |
+| `playground_build` / `playground_publish` | Move compile and publish |
+| `playground_start_sui_localnet` / `playground_stop_sui_localnet` / `playground_reset_sui_localnet` | Sui localnet |
+| `playground_request_faucet` / `playground_get_localnet_logs` / `playground_get_localnet_overview` | Faucet and explorer data |
+| `playground_start_ika_localnet` / `playground_stop_ika_localnet` / `playground_start_ika_stack` / … | Ika stack |
+| `playground_create_dwallet` / `playground_list_dwallets` / `playground_get_ika_explorer` | dWallet and Ika explorer |
+
+</details>
+
+<details>
+<summary><strong>Packages</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `packages_list_catalog` / `packages_list_installed` | SDK and installed packages |
+| `packages_list_custom` / `packages_create_custom` / `packages_update_custom` / `packages_delete_custom` | Custom bundle CRUD |
+| `packages_install` / `packages_update` / `packages_uninstall` | Global install dir |
+| `packages_install_to_project` / `packages_link_to_project` / `packages_unlink_from_project` | Project linking |
+| `packages_get_toolchain_status` | Rust / suiup / Sui CLI status |
+
+</details>
+
+<details>
+<summary><strong>App tools & wallet</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `tool_scan_token` / `tool_build_token_package` / `tool_build_nft_package` | Token and NFT helpers |
+| `tool_list_grpc_catalog` / `tool_grpc_query` / `tool_fetch_address_graph` | gRPC and visualizer |
+| `wallet_get_info` / `wallet_generate` / `wallet_get_balance` / `wallet_request_faucet` / `wallet_send_sui` | Wallet operations |
+
+</details>
+
+---
+
+## Project config (`beluga.json`)
+
+Each project can declare what Beluga attaches when an agent calls `project_open`:
+
+```json
+{
+  "version": 1,
+  "name": "my-move-app",
+  "template": "move",
+  "createdAt": "2026-07-12T10:00:00.000Z",
+  "memories": ["memory-uuid-1"],
+  "packages": ["sui-sdk", "my-custom-stack"],
+  "skills": ["sui-move-reviewer"],
+  "github": {
+    "owner": "you",
+    "repo": "my-move-app",
+    "defaultBranch": "main"
+  }
+}
+```
+
+---
+
+## Data locations
+
+Beluga stores app data under Electron `userData`:
+
+| OS | Path |
+|---|---|
+| macOS | `~/Library/Application Support/beluga/` |
+| Windows | `%APPDATA%\beluga\` |
+| Linux | `~/.config/beluga/` |
+
+Notable subfolders:
+
+| Path | Contents |
+|---|---|
+| `projects/` | Managed project workspaces |
+| `skills/` | Your skills library |
+| `sui-packages/` | Installed packages + `custom-registry.json` |
+| `toolchain/` | Beluga-managed Rust / cargo / Ika artifacts (fallback) |
+| `playground/workspace/` | Default playground files |
+
+Toolchain installers may also use `~/.beluga/toolchain/` when system `~/.rustup` or `~/.cargo` are not writable.
+
+---
+
+## Development
+
+### Requirements
+
+- **Node.js** 20+ (LTS recommended)
+- **npm** 10+
+- macOS, Windows, or Linux for dev; packaged builds tested on **macOS arm64** and **Windows**
+
+### Run from source
 
 ```bash
 git clone https://github.com/TheRealMagyar/beluga.git
 cd beluga
 npm install
+npm start
+```
+
+`npm start` runs a permission check first. If a prior `sudo` left root-owned folders, run:
+
+```bash
+npm run fix-permissions
+```
+
+### Build installers
+
+```bash
 npm run make
 ```
 
-Once the build finishes, the installer will be in the `out/` directory.
+Output lands in `out/` (e.g. `out/Beluga-darwin-arm64/Beluga.app` on macOS).
+
+The build runs `electron-rebuild` for native modules (`node-pty`) and copies runtime dependencies into the packaged app.
+
+### Useful scripts
+
+| Script | Purpose |
+|---|---|
+| `npm start` | Dev mode (Electron Forge + Vite) |
+| `npm run make` | Production installer / ZIP |
+| `npm run fix-permissions` | Fix root-owned Beluga / Rust / cargo dirs (macOS/Linux) |
+| `npm run rustup-update` | Update Rust via Beluga toolchain paths |
+| `npm run kill-sui` | Stop orphaned Sui localnet processes |
+| `npm run kill-ika` | Stop orphaned Ika localnet processes |
+| `npm run sync-walrus-skills` | Refresh bundled Walrus skills under `vendor/walrus-skills` |
+| `npm run lint` | ESLint |
+
+---
+
+## Troubleshooting
+
+### `rustup update` or `suiup` fails with permission errors
+
+System `~/.rustup`, `~/.cargo`, or `~/.cache` may be owned by root after a prior `sudo` install. Run `npm run fix-permissions`, then use **Packages → Toolchain** in Beluga (installs to Beluga-managed paths) or retry after fixing ownership.
+
+### Packaged app crashes on `Cannot find module 'node-pty'`
+
+Rebuild the installer with `npm run make` so native modules are rebuilt and unpacked from the asar archive.
+
+### MCP client cannot connect
+
+1. Confirm Beluga is running (MCP server starts with the app).
+2. Use `http://127.0.0.1:47823/mcp` (or a scoped path) with `mcp-remote` and `--allow-http`.
+3. Check **Settings → MCP endpoint** for the live URL.
+
+### Localnet stuck or port in use
+
+```bash
+npm run kill-sui   # Sui
+npm run kill-ika   # Ika
+```
+
+Then restart localnet from **Playground**.
+
+---
+
+## Architecture (high level)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Beluga Desktop (Electron)                                  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐ │
+│  │ Renderer │  │ Main IPC │  │ Helpers  │  │ MCP :47823  │ │
+│  │ React UI │◄─┤ handlers │◄─┤ Sui/Move │──► HTTP/SSE    │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────┬──────┘ │
+└───────────────────────────────────────────────────│─────────┘
+                                                    │
+                    ┌───────────────────────────────┼───────────────┐
+                    ▼                               ▼               ▼
+             Claude / Cursor                   Walrus Memory    Sui / Ika
+             VS Code / agents                  (on-chain)       localnet
+```
+
+---
+
+## Tech stack
+
+- **Electron** 42 + **Vite** + **React** 19 + **TypeScript**
+- **Tailwind CSS** 4, **Monaco Editor**, **xterm.js**
+- **@mysten/sui**, **@mysten/walrus**, **@mysten/dapp-kit**, **@ika.xyz/sdk**
+- **@modelcontextprotocol/sdk** for the MCP server
+- **node-pty** for the integrated console
+
+---
+
+## License
+
+MIT — see [package.json](./package.json).
+
+---
+
+## Links
+
+- [Walrus Memory](https://memory.walrus.xyz)
+- [Sui Documentation](https://docs.sui.io)
+- [Model Context Protocol](https://modelcontextprotocol.io)
+- [Releases](https://github.com/TheRealMagyar/beluga/releases)

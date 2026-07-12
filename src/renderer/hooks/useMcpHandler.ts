@@ -93,8 +93,27 @@ export function useMcpHandler({
             namespace: e.namespace,
           }));
 
+        const attachedSkills = await window.skills.getMany(
+          result.linkedSkillIds ?? [],
+        );
+
         console.log('[hook] memoryCredentials:', memoryCredentials);
-        return { ...result, memoryCredentials };
+        return {
+          ...result,
+          memoryCredentials,
+          attachedSkills: attachedSkills.map((skill) => ({
+            id: skill.id,
+            name: skill.name,
+            description: skill.description,
+            content: skill.content,
+          })),
+        };
+      },
+      'mcp:skill-list': async () => window.skills.list(),
+      'mcp:skill-get': async ({ skill_id }: { skill_id: string }) => {
+        const skill = await window.skills.get(skill_id);
+        if (!skill) throw new Error(`Skill not found: ${skill_id}`);
+        return skill;
       },
       'mcp:project-create': async ({ project_name }: { project_name: string }) => {
         return await (window as any).mcp.projectCreate(project_name);
@@ -125,6 +144,72 @@ export function useMcpHandler({
       },
       'mcp:folder-rename': async ({ project_name, old_path, new_path }: { project_name: string; old_path: string; new_path: string }) => {
         return await (window as any).mcp.folderRename(project_name, old_path, new_path);
+      },
+
+      'mcp:playground-create-dwallet': async ({ curve }: { curve?: string }) => {
+        const { createSharedDWallet, toIkaConfig } = await import(
+          '../pages/playgroundComponents/ika-playground'
+        );
+        const { createSuiClient, getWalletAddress } = await import(
+          '../pages/playgroundComponents/utils'
+        );
+        const { IkaClient } = await import('@ika.xyz/sdk');
+
+        const config = await window.playground.getIkaConfig();
+        if (!config?.packages || !config?.objects) {
+          throw new Error('Ika localnet is not configured. Start Ika stack first.');
+        }
+
+        const walletAddress = await getWalletAddress();
+        if (!walletAddress) {
+          throw new Error('Connect or create a Beluga wallet first.');
+        }
+
+        const suiClient = createSuiClient('localnet');
+        const ikaClient = new IkaClient({
+          suiClient,
+          config: toIkaConfig(config),
+        });
+
+        const validCurves = ['secp256k1', 'secp256r1', 'ed25519', 'ristretto'] as const;
+        const picked = validCurves.includes(curve as (typeof validCurves)[number])
+          ? (curve as (typeof validCurves)[number])
+          : 'secp256k1';
+
+        return createSharedDWallet({
+          ikaClient,
+          suiClient,
+          walletAddress,
+          curve: picked,
+        });
+      },
+
+      'mcp:playground-list-dwallets': async () => {
+        const { listOwnedDWalletCaps, toIkaConfig } = await import(
+          '../pages/playgroundComponents/ika-playground'
+        );
+        const { createSuiClient, getWalletAddress } = await import(
+          '../pages/playgroundComponents/utils'
+        );
+        const { IkaClient } = await import('@ika.xyz/sdk');
+
+        const config = await window.playground.getIkaConfig();
+        if (!config?.packages || !config?.objects) {
+          return [];
+        }
+
+        const walletAddress = await getWalletAddress();
+        if (!walletAddress) {
+          throw new Error('Connect or create a Beluga wallet first.');
+        }
+
+        const suiClient = createSuiClient('localnet');
+        const ikaClient = new IkaClient({
+          suiClient,
+          config: toIkaConfig(config),
+        });
+
+        return listOwnedDWalletCaps(ikaClient, suiClient, walletAddress);
       },
     };
 

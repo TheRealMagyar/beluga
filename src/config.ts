@@ -13,6 +13,12 @@ import trashSvg from './assets/trash.svg'
 import searchSvg from './assets/search.svg'
 import refreshSvg from './assets/refresh.svg'
 import folderEditSvg from './assets/folder-edit.svg'
+import playgroundSvg from './assets/playground.svg'
+import packagesSvg from './assets/packages.svg'
+import toolsSvg from './assets/tools.svg'
+import skillsSvg from './assets/skills.svg'
+import sparklesSvg from './assets/sparkles.svg'
+import graduationSvg from './assets/graduation.svg'
 
 export const CONFIG = {
   appName: "Beluga",
@@ -24,8 +30,29 @@ export const CONFIG = {
         icon: devFolderSvg,
         label: "Projects",
       },
+      {
+        path: "/skills",
+        icon: skillsSvg,
+        label: "Skills",
+      },
+      {
+        path: "/playground",
+        icon: playgroundSvg,
+        label: "Playground",
+      },
+      {
+        path: "/packages",
+        icon: packagesSvg,
+        label: "Packages",
+      },
+      {
+        path: "/tools",
+        icon: toolsSvg,
+        label: "Tools",
+      },
     ],
     docsIcon: bookSvg,
+    learningIcon: graduationSvg,
     settingsIcon: cogwheelSvg,
     walletIcon: walletSvg,
     backgroundcolor: "#202020",
@@ -38,8 +65,18 @@ export const CONFIG = {
         icon: applicationSvg,
       },
       {
+        id: "ai",
+        label: "AI Assistant",
+        icon: sparklesSvg,
+      },
+      {
         id: "mcp",
         label: "MCP endpoint",
+        icon: linkSvg,
+      },
+      {
+        id: "github",
+        label: "GitHub",
         icon: linkSvg,
       },
       {
@@ -53,6 +90,8 @@ export const CONFIG = {
     projectCard: {
       folderIcon: folderSvg,
       memoryIcon: puzzleSvg,
+      packageIcon: packagesSvg,
+      skillIcon: skillsSvg,
       editIcon: pencilSvg,
       deleteIcon: trashSvg,
       searchIcon: searchSvg,

@@ -5,15 +5,20 @@ import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
+import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { copyRuntimeDeps } from "./scripts/package-runtime-deps.mjs";
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack:
+        "**/{node_modules/node-pty/**,node_modules/@mysten/walrus-wasm/**,*.node}",
+    },
     icon: "./src/assets/icons/icon", // maradhat
     extraResource: [
-      // ← ÚJ SOROK
       "./src/assets",
+      "./vendor/walrus-skills",
     ],
   },
   rebuildConfig: {},
@@ -30,6 +35,7 @@ const config: ForgeConfig = {
     }),
   ],
   plugins: [
+    new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       build: [
         {
@@ -57,9 +63,14 @@ const config: ForgeConfig = {
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: true,
+      [FuseV1Options.OnlyLoadAppFromAsar]: false,
     }),
   ],
+  hooks: {
+    packageAfterPrune: async (_forgeConfig, buildPath) => {
+      await copyRuntimeDeps(buildPath);
+    },
+  },
 };
 
 export default config;

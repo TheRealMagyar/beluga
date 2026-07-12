@@ -20,7 +20,6 @@ import {
   isElectron,
 } from "./memoryMangerComponents/constants";
 import { saveEntries, uid } from "./memoryMangerComponents/utils";
-import { walrusStyles } from "./memoryMangerComponents/styles";
 import { ManagerView } from "./memoryMangerComponents/ManagerView";
 import { WorkspaceView } from "./memoryMangerComponents/WorkspaceView";
 import {
@@ -29,7 +28,17 @@ import {
   RenameModal,
   DeleteModal,
 } from "./memoryMangerComponents/Modals";
-import { Plus, Download, ArrowLeft } from "lucide-react";
+import {
+  MemoryFilterChip,
+  MemorySortSelect,
+  MemoryViewToggle,
+  SearchField,
+} from "./memoryMangerComponents/memory-ui";
+import { ArrowLeft, Download, Plus, Search } from "lucide-react";
+
+type MemoryFilter = "all" | "mainnet" | "testnet";
+type MemorySort = "recent" | "name" | "network";
+type MemoryViewMode = "grid" | "list";
 
 export function WalrusMemoryApp({
   entries,
@@ -54,6 +63,10 @@ export function WalrusMemoryApp({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<"manager" | "workspace">("manager");
 
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<MemoryFilter>("all");
+  const [sort, setSort] = useState<MemorySort>("recent");
+  const [cardView, setCardView] = useState<MemoryViewMode>("grid");
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -93,6 +106,36 @@ export function WalrusMemoryApp({
     () => entries.find((e) => e.id === activeId) ?? null,
     [entries, activeId],
   );
+
+  const stats = useMemo(() => {
+    const mainnet = entries.filter((e) => e.network === "mainnet").length;
+    const testnet = entries.filter((e) => e.network === "testnet").length;
+    return { total: entries.length, mainnet, testnet };
+  }, [entries]);
+
+  const filteredEntries = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = entries.filter((e) => {
+      if (q) {
+        const hay = `${e.label} ${e.namespace} ${e.accountId}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (filter === "mainnet") return e.network === "mainnet";
+      if (filter === "testnet") return e.network === "testnet";
+      return true;
+    });
+
+    list = [...list].sort((a, b) => {
+      if (sort === "name") return a.label.localeCompare(b.label);
+      if (sort === "network") {
+        const net = a.network.localeCompare(b.network);
+        return net !== 0 ? net : a.label.localeCompare(b.label);
+      }
+      return b.createdAt - a.createdAt;
+    });
+
+    return list;
+  }, [entries, search, filter, sort]);
 
   useMcpHandler({
     entries,
@@ -421,125 +464,191 @@ export function WalrusMemoryApp({
     setLog([]);
   };
 
-  return (
-    <>
-      <style>{walrusStyles}</style>
+  const openCreateModal = () => {
+    if (!walletAddress) return;
+    setShowCreateMenu(false);
+    setShowCreateModal(true);
+  };
 
-      <div className="walrus-app">
-        {/* Header */}
-        <header className="sticky top-0 z-40 border-b border-[#2a2a3c] px-8 h-16 flex items-center justify-between bg-[#1e1e1e]">
-          {/* Left: back button in workspace */}
-          <div className="flex items-center gap-3">
-            {view === "workspace" && (
+  const openImportModal = () => {
+    setShowCreateMenu(false);
+    setShowImportModal(true);
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[#161616] text-[#f0f0f5] memory-main-glow">
+      <header className="flex-shrink-0 sticky top-0 z-30 border-b border-[#2a2a2a] bg-[#1e1e1e]/95 backdrop-blur-sm">
+        <div className="px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-3">
+            {view === "workspace" ? (
               <button
+                type="button"
                 onClick={() => setView("manager")}
-                className="flex items-center gap-2 text-[#8888a0] hover:text-[#f0f0f5] transition-colors"
+                className="flex items-center gap-2 text-[#8888a0] hover:text-[#f0f0f5] cursor-pointer"
                 aria-label="Back to Memory Manager"
               >
                 <ArrowLeft size={16} />
-                <span className="text-[15px] font-semibold text-[#f0f0f5]">
+                <span className="text-[15px] font-semibold text-[#f4f4fa] truncate max-w-[240px]">
                   {activeEntry?.label ?? "Back"}
                 </span>
               </button>
-            )}
-          </div>
-
-          {/* Right: dropdown trigger */}
-          <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setShowCreateMenu((v) => !v)}
-              className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-[10px] bg-gradient-to-br from-[#6c63ff] to-[#5148d4] text-white active:scale-[0.97] transition-transform"
-            >
-              <Plus size={13} />
-              New / Import
-            </button>
-
-            {showCreateMenu && (
-              <div className="absolute top-[calc(100%+8px)] right-0 bg-[#1e1e1e] border border-[#2a2a3c] rounded-[12px] p-2 w-[220px] z-50 shadow-[0_18px_40px_-16px_#000]">
-                <button
-                  disabled={!walletAddress}
-                  onClick={() => {
-                    if (!walletAddress) return;
-                    setShowCreateMenu(false);
-                    setShowCreateModal(true);
-                  }}
-                  className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-[8px] text-[13.5px] text-[#f0f0f5] hover:bg-[#2a2a3c] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                >
-                  <span className="w-7 h-7 rounded-[8px] bg-[#6c63ff22] flex items-center justify-center flex-shrink-0">
-                    <Plus size={14} color="#9d97ff" />
-                  </span>
-                  <span>
-                    <div className="font-semibold">New account</div>
-                    <div className="text-[11px] text-[#555570]">
-                      {walletAddress ? "On-chain creation" : "Wallet required"}
-                    </div>
-                  </span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCreateMenu(false);
-                    setShowImportModal(true);
-                  }}
-                  className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-[8px] text-[13.5px] text-[#f0f0f5] hover:bg-[#2a2a3c] transition-colors"
-                >
-                  <span className="w-7 h-7 rounded-[8px] bg-[#4ca3ff1a] flex items-center justify-center flex-shrink-0">
-                    <Download size={14} color="#4ca3ff" />
-                  </span>
-                  <span>
-                    <div className="font-semibold">Import</div>
-                    <div className="text-[11px] text-[#555570]">Existing ID + key</div>
-                  </span>
-                </button>
+            ) : (
+              <div>
+                <h1 className="text-[15px] font-semibold text-[#f4f4fa]">Memory</h1>
+                <p className="text-[11px] text-[#666688] mt-0.5">
+                  {stats.total} fragment{stats.total === 1 ? "" : "s"}
+                  <span className="mx-1.5 text-[#3a3a48]">·</span>
+                  {stats.mainnet} mainnet
+                  <span className="mx-1.5 text-[#3a3a48]">·</span>
+                  {stats.testnet} testnet
+                </p>
               </div>
             )}
           </div>
-        </header>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {view === "manager" ? (
+              <MemoryViewToggle view={cardView} onChange={setCardView} />
+            ) : null}
+
+            <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setShowCreateMenu((v) => !v)}
+                className="h-9 px-4 flex items-center gap-2 rounded-xl text-[12px] font-semibold cursor-pointer border border-[#6c63ff]/40 bg-[#6c63ff]/18 text-[#b8b0ff] hover:bg-[#6c63ff]/26"
+              >
+                <Plus size={14} />
+                New / Import
+              </button>
+
+              {showCreateMenu && (
+                <div className="absolute top-[calc(100%+8px)] right-0 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl p-2 w-[220px] z-50 shadow-[0_18px_40px_-16px_#000]">
+                  <button
+                    type="button"
+                    disabled={!walletAddress}
+                    onClick={openCreateModal}
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] text-[#f0f0f5] hover:bg-white/[0.05] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-[#6c63ff]/15 flex items-center justify-center flex-shrink-0">
+                      <Plus size={14} className="text-[#9d97ff]" />
+                    </span>
+                    <span>
+                      <div className="font-semibold">New account</div>
+                      <div className="text-[11px] text-[#55556a]">
+                        {walletAddress ? "On-chain creation" : "Wallet required"}
+                      </div>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openImportModal}
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] text-[#f0f0f5] hover:bg-white/[0.05] cursor-pointer"
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-[#4ca3ff]/12 flex items-center justify-center flex-shrink-0">
+                      <Download size={14} className="text-[#4ca3ff]" />
+                    </span>
+                    <span>
+                      <div className="font-semibold">Import</div>
+                      <div className="text-[11px] text-[#55556a]">Existing ID + key</div>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {view === "manager" ? (
-          <ManagerView
-            entries={entries}
-            walletAddress={walletAddress}
-            onOpen={openWorkspace}
-            onRename={(id, current) => {
-              setRenamingId(id);
-              setRenameValue(current);
-            }}
-            onDelete={(id) => setConfirmDeleteId(id)}
-            onCreate={() => setShowCreateMenu((v) => !v)}
-            showCreateMenu={showCreateMenu}
-            onPickCreate={() => setShowCreateModal(true)}
-            onPickImport={() => setShowImportModal(true)}
-            revealedKeyId={revealedKeyId}
-            setRevealedKeyId={setRevealedKeyId}
-            copiedField={copiedField}
-            copyToClipboard={copyToClipboard}
-          />
-        ) : (
-          <WorkspaceView
-            entry={activeEntry}
-            isReady={!!memwalClient}
-            tab={tab}
-            setTab={setTab}
-            rememberText={rememberText}
-            setRememberText={setRememberText}
-            recallQuery={recallQuery}
-            setRecallQuery={setRecallQuery}
-            analyzeText={analyzeText}
-            setAnalyzeText={setAnalyzeText}
-            recallResults={recallResults}
-            analyzeFacts={analyzeFacts}
-            loading={loading}
-            health={health}
-            log={log}
-            handleRemember={handleRemember}
-            handleRecall={handleRecall}
-            handleAnalyze={handleAnalyze}
-            onNamespaceChange={(ns) =>
-              activeEntry && updateNamespace(activeEntry.id, ns)
-            }
-          />
-        )}
-      </div>
+          <div className="px-6 pb-3 flex flex-wrap items-center gap-2.5">
+            <div className="flex-1 min-w-[200px] max-w-md">
+              <SearchField
+                value={search}
+                onChange={setSearch}
+                placeholder="Search fragments..."
+                icon={<Search size={14} />}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <MemoryFilterChip
+                active={filter === "all"}
+                onClick={() => setFilter("all")}
+                count={stats.total}
+              >
+                All
+              </MemoryFilterChip>
+              <MemoryFilterChip
+                active={filter === "mainnet"}
+                onClick={() => setFilter("mainnet")}
+                count={stats.mainnet}
+              >
+                Mainnet
+              </MemoryFilterChip>
+              <MemoryFilterChip
+                active={filter === "testnet"}
+                onClick={() => setFilter("testnet")}
+                count={stats.testnet}
+              >
+                Testnet
+              </MemoryFilterChip>
+            </div>
+
+            <MemorySortSelect
+              value={sort}
+              onChange={(v) => setSort(v as MemorySort)}
+            />
+          </div>
+        ) : null}
+      </header>
+
+      <main className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-6 py-6 max-w-[1400px] mx-auto">
+          {view === "manager" ? (
+            <ManagerView
+              entries={filteredEntries}
+              view={cardView}
+              search={search}
+              walletConnected={!!walletAddress}
+              onOpen={openWorkspace}
+              onRename={(id, current) => {
+                setRenamingId(id);
+                setRenameValue(current);
+              }}
+              onDelete={(id) => setConfirmDeleteId(id)}
+              onCreate={openCreateModal}
+              onImport={openImportModal}
+              revealedKeyId={revealedKeyId}
+              setRevealedKeyId={setRevealedKeyId}
+              copiedField={copiedField}
+              copyToClipboard={copyToClipboard}
+            />
+          ) : (
+            <WorkspaceView
+              entry={activeEntry}
+              isReady={!!memwalClient}
+              tab={tab}
+              setTab={setTab}
+              rememberText={rememberText}
+              setRememberText={setRememberText}
+              recallQuery={recallQuery}
+              setRecallQuery={setRecallQuery}
+              analyzeText={analyzeText}
+              setAnalyzeText={setAnalyzeText}
+              recallResults={recallResults}
+              analyzeFacts={analyzeFacts}
+              loading={loading}
+              health={health}
+              log={log}
+              handleRemember={handleRemember}
+              handleRecall={handleRecall}
+              handleAnalyze={handleAnalyze}
+              onNamespaceChange={(ns) =>
+                activeEntry && updateNamespace(activeEntry.id, ns)
+              }
+            />
+          )}
+        </div>
+      </main>
 
       {/* Modals */}
       {showCreateModal && (
@@ -586,6 +695,6 @@ export function WalrusMemoryApp({
           onClose={() => setConfirmDeleteId(null)}
         />
       )}
-    </>
+    </div>
   );
 }

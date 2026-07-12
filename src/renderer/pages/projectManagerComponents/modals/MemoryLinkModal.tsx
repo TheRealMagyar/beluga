@@ -44,7 +44,7 @@ export function MemoryLinkModal({
     setSaving(true);
     setError(null);
     try {
-      await saveLinkedMemoryIds(projectPath, selected);
+      await saveLinkedMemoryIds(projectPath, selected, projectName);
       onSaved();
     } catch (e: any) {
       setError(e.message || "Failed to save.");

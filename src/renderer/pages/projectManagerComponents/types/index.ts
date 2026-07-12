@@ -1,5 +1,7 @@
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type { ProjectTemplateId } from "../../../../helper/project-templates";
+
 export interface FileTreeNode {
   name: string;
   path: string;
@@ -28,6 +30,8 @@ export interface Project {
   createdAt: string;
   files: ProjectFile[];
   linkedMemoryIds: string[];
+  linkedPackageIds: string[];
+  linkedSkillIds: string[];
 }
 
 export interface MemoryFragment {

@@ -88,5 +88,9 @@ typings/
 # Vite
 .vite/
 
+dist/
+.cargo-cache/
+vendor/
+
 # Electron-Forge
 out/

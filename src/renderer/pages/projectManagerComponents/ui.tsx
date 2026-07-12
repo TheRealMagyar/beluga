@@ -41,7 +41,7 @@ export function IconButton({
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded-lg border transition-all duration-150 text-sm
+      className={`p-1.5 rounded-lg border text-sm
         ${
           danger
             ? "border-transparent text-[#8888a0] hover:border-[#ff4d6d]/40 hover:text-[#ff4d6d] hover:bg-[#ff4d6d]/08"
@@ -58,9 +58,11 @@ export function IconButton({
 export function ModalWrapper({
   onClose,
   children,
+  wide = false,
 }: {
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -77,7 +79,9 @@ export function ModalWrapper({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-[#2a2a3c] bg-[#14141f] p-6 shadow-2xl"
+        className={`w-full rounded-2xl border border-[#2a2a2a] bg-[#1e1e1e] p-6 shadow-2xl ${
+          wide ? "max-w-xl" : "max-w-md"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

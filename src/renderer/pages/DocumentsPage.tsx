@@ -4,7 +4,11 @@ import { useState } from "react";
 
 type DocSection =
   | "getting-started"
-  | "ai-interaction"
+  | "modules"
+  | "playground"
+  | "packages"
+  | "tools"
+  | "ai-assistant"
   | "mcp-integration"
   | "advanced";
 
@@ -372,9 +376,13 @@ function PromptExample({ prompt, note }: { prompt: string; note?: string }) {
 
 const NAV_ITEMS: { id: DocSection; label: string; badge?: string }[] = [
   { id: "getting-started", label: "Getting Started" },
-  { id: "ai-interaction", label: "AI Interaction", badge: "new" },
+  { id: "modules", label: "Memory & Projects" },
+  { id: "playground", label: "Playground" },
+  { id: "packages", label: "Packages" },
+  { id: "tools", label: "Tools" },
+  { id: "ai-assistant", label: "AI Assistant", badge: "new" },
   { id: "mcp-integration", label: "MCP Integration" },
-  { id: "advanced", label: "Advanced Usage" },
+  { id: "advanced", label: "Workflows" },
 ];
 
 // ── Sections ──────────────────────────────────────────────────────────────────
@@ -382,182 +390,585 @@ const NAV_ITEMS: { id: DocSection; label: string; badge?: string }[] = [
 function GettingStarted() {
   return (
     <div>
-      <SectionTitle>Getting Started</SectionTitle>
+      <SectionTitle>Getting Started with Beluga</SectionTitle>
       <Prose>
-        Walrus Memory is an agentic wallet on the Sui blockchain — vectorized,
-        decentralized memory for your AI agents. Your AI stops forgetting what
-        you told it: everything is stored, encrypted, on the Walrus network.
+        Beluga is a desktop hub for Sui and Walrus development. It combines
+        persistent AI memory, local project workspaces, a Move playground,
+        package management, and built-in dev tools — all reachable from one app
+        or through MCP for external agents like Cursor and Claude.
       </Prose>
 
+      <div className="grid grid-cols-3 gap-3 my-4">
+        <MiniCard
+          icon="🦭"
+          title="Memory"
+          desc="Walrus-backed vector memory that survives across chat sessions."
+        />
+        <MiniCard
+          icon="📂"
+          title="Projects"
+          desc="Local workspaces with beluga.json metadata, skills, and packages."
+        />
+        <MiniCard
+          icon="⚡"
+          title="Playground"
+          desc="Edit, build, and publish Move packages on Sui localnet."
+        />
+      </div>
+
       <Tip type="warning">
-        Setting up a new Walrus Memory account is an on-chain action, so make
-        sure your wallet holds a small amount of <strong>SUI</strong> before
-        you start — it covers the network fee for creating the account.
+        Creating a Walrus Memory account is an on-chain action — keep a small
+        amount of <strong>SUI</strong> in your Beluga wallet before you start.
       </Tip>
 
-      <SubTitle>The four steps</SubTitle>
+      <SubTitle>First-time setup</SubTitle>
       <Prose>
-        Tap each step below to expand it. Steps 1–3 are one-time setup; once
-        they're done, you connect an AI through MCP whenever you want to work.
+        Expand each step below. Steps 1–3 are one-time; after that you can use
+        the built-in AI Assistant or connect an external agent through MCP.
       </Prose>
 
       <ExpandableStep
-          n={1}
-          title="Generate or import a wallet"
-          summary="Create a fresh Sui wallet, or bring your own via private key."
-          defaultOpen
-        >
-          <p className="mb-2">
-            Click <InlineCode>Generate Wallet</InlineCode> to create a new random
-            Sui keypair instantly — no external wallet needed.
-          </p>
-          <p>
-            Already have one? Click <InlineCode>Import Wallet</InlineCode> and
-            paste your private key.
-          </p>
+        n={1}
+        title="Set up your wallet"
+        summary="Generate or import a Sui wallet from the sidebar."
+        defaultOpen
+      >
+        <p className="mb-2">
+          Click the <InlineCode>Wallet</InlineCode> button in the sidebar.
+          Use <InlineCode>Generate Wallet</InlineCode> for a new keypair, or{" "}
+          <InlineCode>Import Wallet</InlineCode> to paste an existing private
+          key.
+        </p>
+        <p>
+          The wallet is used for memory account creation, Playground publishes,
+          faucet requests, and on-chain tool actions.
+        </p>
       </ExpandableStep>
 
       <ExpandableStep
         n={2}
-        title="Create or import a Walrus Memory"
-        summary="This is your on-chain memory store — where your AI's context actually lives."
+        title="Create or import Walrus Memory"
+        summary="Your on-chain context store for AI agents."
       >
         <p className="mb-2">
-          Go to the <InlineCode>Memory</InlineCode> tab. If this is your first
-          time, tap <InlineCode>✨ Create Memory Account</InlineCode> — this
-          submits a one-time on-chain transaction, which is why you need a bit
-          of SUI in your wallet first.
-        </p>
-        <p className="mb-2">
-          Already have a Walrus Memory account from before? Tap{" "}
-          <InlineCode>Import Memory</InlineCode> and enter its account ID
-          instead of creating a new one.
+          Open <InlineCode>Memory</InlineCode> in the sidebar. Tap{" "}
+          <InlineCode>Create Memory Account</InlineCode> for a new account, or{" "}
+          <InlineCode>Import Memory</InlineCode> if you already have one.
         </p>
         <p>
-          You can optionally set a namespace (e.g.{" "}
-          <InlineCode>research</InlineCode>) to keep different memories
-          separated. The default namespace is{" "}
-          <InlineCode>default</InlineCode>.
+          Namespaces (default: <InlineCode>default</InlineCode>) let you
+          separate contexts — e.g. <InlineCode>research</InlineCode> vs{" "}
+          <InlineCode>playground</InlineCode>.
         </p>
       </ExpandableStep>
 
       <ExpandableStep
         n={3}
-        title="Create a project and attach your memory"
-        summary="Projects are where your files live; memories give them long-term context."
+        title="Create a project and link memory"
+        summary="Projects hold your code; memory holds what the AI learned."
       >
         <p className="mb-2">
-          Open the <InlineCode>Projects</InlineCode> tab and tap{" "}
-          <InlineCode>+ New Project</InlineCode>. Give it a name — this
-          creates a fresh workspace with starter files (
-          <InlineCode>WALRUS.md</InlineCode>, <InlineCode>CLAUDE.md</InlineCode>
-          ).
+          Go to <InlineCode>Projects</InlineCode> →{" "}
+          <InlineCode>+ New Project</InlineCode>. Beluga scaffolds starter
+          files and a <InlineCode>beluga.json</InlineCode> config.
         </p>
         <p>
-          Then attach the Walrus Memory you created or imported in step 2.
-          You can attach more than one memory to the same project if you want
-          to combine multiple namespaces or accounts.
+          Link your Walrus Memory to the project so{" "}
+          <InlineCode>remember()</InlineCode> and <InlineCode>recall()</InlineCode>{" "}
+          calls persist context across sessions. You can also attach Skills and
+          Packages from their respective managers.
         </p>
       </ExpandableStep>
 
       <ExpandableStep
         n={4}
-        title="Connect an AI agent through MCP"
-        summary="Point Claude, Cursor, or any MCP-compatible client at your project."
+        title="Pick how you work with AI"
+        summary="Built-in assistant or external MCP client — or both."
       >
         <p className="mb-2">
-          With your wallet, memory, and project set up, you can now connect
-          any MCP-compatible AI — Claude Desktop, Cursor, VS Code — directly
-          to your projects.
+          Use the <InlineCode>AI Assistant</InlineCode> panel (sparkle icon) for
+          in-app help with full Beluga tool access — Playground deploys,
+          package installs, memory recall, and more.
         </p>
         <p>
-          Full setup instructions, configuration snippets, and the list of
-          available tools are covered in the{" "}
-          <strong className="text-[#4ca3ff]">MCP Integration</strong> section.
+          Prefer Cursor or Claude Desktop? Connect them via MCP — see{" "}
+          <strong className="text-[#4ca3ff]">MCP Integration</strong> for
+          config snippets and scoped endpoints.
         </p>
       </ExpandableStep>
 
       <Tip type="success">
-        Generate a delegate key from the{" "}
-        <strong className="text-[#00d4aa]">memory.walrus.xyz</strong>{" "}
-        Playground without ever exposing your main wallet key. A delegate key
-        is scoped to memory operations only.
+        Configure the AI Assistant under <InlineCode>Settings → AI Assistant</InlineCode>.
+        You can use a Grok API key or Grok Build OAuth — enable tool use so the
+        assistant can act on your projects directly.
       </Tip>
     </div>
   );
 }
 
-function AiInteraction() {
+function Modules() {
+  return (
+    <div>
+      <SectionTitle>Memory &amp; Projects</SectionTitle>
+      <Prose>
+        Memory and Projects are the foundation of Beluga. Playground, Packages,
+        and Tools build on top — see their dedicated sections in this guide.
+      </Prose>
+
+      <SubTitle>Memory</SubTitle>
+      <Prose>
+        Walrus vector memory linked to projects. Agents call{" "}
+        <InlineCode>remember()</InlineCode> after decisions and{" "}
+        <InlineCode>recall()</InlineCode> at session start. Supports namespaces
+        and delegate keys scoped to memory operations only.
+      </Prose>
+
+      <SubTitle>Projects</SubTitle>
+      <Prose>
+        Local workspaces with file explorer, <InlineCode>beluga.json</InlineCode>{" "}
+        metadata, and links to memories, skills, and packages. Open a project
+        before any agent work — <InlineCode>project_open</InlineCode> returns the
+        file tree, memory credentials, and attached skills/packages.
+      </Prose>
+
+      <SubTitle>Skills</SubTitle>
+      <Prose>
+        Reusable instruction files (<InlineCode>SKILL.md</InlineCode>) linked
+        from the project card. Agents load them via{" "}
+        <InlineCode>skill_get</InlineCode> or the attached list from{" "}
+        <InlineCode>project_open</InlineCode>. Use skills for deploy flows,
+        code conventions, or domain-specific rules.
+      </Prose>
+
+      <Tip type="info">
+        The <strong>Console</strong> page (if enabled in your build) aggregates
+        logs from localnet and toolchain jobs — handy when debugging Playground
+        or package installs.
+      </Tip>
+    </div>
+  );
+}
+
+function PlaygroundSection() {
+  const localFlow = `Typical local test loop:
+1. CLI panel → Start Sui localnet
+2. Faucet panel → fund your Beluga wallet on localnet
+3. Edit Move sources in the Monaco editor (or Load from Project)
+4. Build → fix compile errors in the console
+5. Deploy → publish package; package ID is saved for this session
+6. Test → call entry functions with auto-detected args (u64, objects, Coin<SUI>)
+7. Explorer → inspect txs, objects, and emitted events`;
+
+  return (
+    <div>
+      <SectionTitle>Playground — Local Test Environment</SectionTitle>
+      <Prose>
+        The Playground is Beluga's integrated Move IDE and Sui localnet sandbox.
+        Write, compile, publish, and test packages without leaving the app — no
+        external terminal required for the core loop.
+      </Prose>
+
+      <SubTitle>Two tabs</SubTitle>
+      <div className="grid grid-cols-2 gap-3 my-4">
+        <MiniCard
+          icon="📝"
+          title="Move"
+          desc="Standard Sui Move packages — editor, build, publish, entry testing, explorer."
+        />
+        <MiniCard
+          icon="🔐"
+          title="Ika"
+          desc="Ika dWallet stack: local Sui + Ika nodes, heal, faucet, dWallet create/list."
+        />
+      </div>
+
+      <SubTitle>Dock panels</SubTitle>
+      <Prose>
+        The vertical dock on the right opens focused panels. Each maps to a step
+        in the local dev loop:
+      </Prose>
+      <div className="mt-2">
+        <ToolRow
+          name="Build"
+          desc="Compile the current workspace with sui move build. Errors and warnings stream to the console."
+        />
+        <ToolRow
+          name="Faucet"
+          desc="Request SUI on localnet (or testnet/devnet via network switcher) to fund publishes and entry calls."
+        />
+        <ToolRow
+          name="CLI"
+          desc="Start/stop/reset Sui localnet, view live logs, check RPC readiness. For Ika tab: full stack controls."
+        />
+        <ToolRow
+          name="Explorer"
+          desc="Browse recent local transactions, object changes, and emitted events with full JSON payloads."
+        />
+        <ToolRow
+          name="Test"
+          desc="Auto-detects public entry functions from sources. Builds typed inputs per arg (u64, object IDs, Coin<SUI>)."
+        />
+        <ToolRow
+          name="Deploy"
+          desc="Publish compiled modules to the active network. Saves package ID and upgrade cap for follow-up txs."
+        />
+      </div>
+
+      <SubTitle>Load from Project</SubTitle>
+      <Prose>
+        Projects with Move code can be loaded into the Playground workspace via{" "}
+        <InlineCode>Load from Project</InlineCode>. Beluga copies sources and
+        parses entry functions for the Test panel. After iterating locally,
+        sync changes back to the project through the AI assistant or file tools.
+      </Prose>
+
+      <SubTitle>Local test workflow</SubTitle>
+      <CodeBlock language="text" code={localFlow} />
+
+      <Tip type="warning">
+        Move 2024: structs need <InlineCode>public</InlineCode> visibility when
+        referenced across modules. Entry args use <InlineCode>vector[]</InlineCode>{" "}
+        literal syntax where applicable — the Test panel distinguishes{" "}
+        <InlineCode>u64</InlineCode> from object IDs automatically.
+      </Tip>
+
+      <SubTitle>Networks</SubTitle>
+      <Prose>
+        The network switcher at the top sets the target for publish and test:
+        <InlineCode>localnet</InlineCode> (default for dev),{" "}
+        <InlineCode>testnet</InlineCode>, <InlineCode>devnet</InlineCode>, or{" "}
+        <InlineCode>mainnet</InlineCode>. Localnet must be running (CLI panel)
+        before local publishes succeed.
+      </Prose>
+
+      <SubTitle>MCP tools</SubTitle>
+      <Prose>
+        Agents use scoped endpoint{" "}
+        <InlineCode>/mcp/playground</InlineCode> for this area. Key tools:
+      </Prose>
+      <div className="mt-2">
+        <ToolRow
+          name="playground_start_sui_localnet"
+          params=""
+          desc="Start managed Sui localnet."
+        />
+        <ToolRow
+          name="playground_write_files"
+          params="files[]"
+          desc="Sync Move sources into the workspace before build."
+        />
+        <ToolRow
+          name="playground_build / playground_publish"
+          params="files[]"
+          desc="Compile and deploy; returns package ID and modules."
+        />
+        <ToolRow
+          name="playground_get_localnet_logs"
+          params=""
+          desc="Stream validator logs for debugging failed publishes."
+        />
+        <ToolRow
+          name="playground_start_ika_stack"
+          params=""
+          desc="Boot Ika + Sui stack for dWallet development (Ika tab)."
+        />
+      </div>
+    </div>
+  );
+}
+
+function PackagesSection() {
+  return (
+    <div>
+      <SectionTitle>Packages</SectionTitle>
+      <Prose>
+        The Packages manager handles two concerns: installing the Move/Sui{" "}
+        <strong>toolchain</strong> on your machine, and managing{" "}
+        <strong>SDK npm packages</strong> from the Sui ecosystem catalog.
+      </Prose>
+
+      <SubTitle>SDK Catalog</SubTitle>
+      <Prose>
+        Browse curated npm packages grouped by category — Core, Wallet, Storage,
+        Payments, and Tooling. Each entry shows dependencies, install command,
+        and documentation link.
+      </Prose>
+      <div className="grid grid-cols-2 gap-3 my-4">
+        <MiniCard
+          icon="📥"
+          title="Install"
+          desc="Downloads the package into Beluga's local package store with pinned versions."
+        />
+        <MiniCard
+          icon="🔗"
+          title="Link to project"
+          desc="From the project card or MCP — wires versions into the project's package config."
+        />
+        <MiniCard
+          icon="⬆️"
+          title="Update"
+          desc="Refresh installed packages to newer catalog versions."
+        />
+        <MiniCard
+          icon="🗑️"
+          title="Uninstall"
+          desc="Remove from the local store; unlink from projects first if attached."
+        />
+      </div>
+
+      <SubTitle>Toolchain</SubTitle>
+      <Prose>
+        The Toolchain tab installs and verifies the binaries Playground and Move
+        builds depend on:
+      </Prose>
+      <div className="mt-2">
+        <ToolRow
+          name="Sui CLI"
+          desc="sui move build / publish — required for Playground compile and deploy."
+        />
+        <ToolRow
+          name="suiup"
+          desc="Version manager for switching Sui CLI releases."
+        />
+        <ToolRow
+          name="Rust / Cargo"
+          desc="Needed for Ika toolchain builds and some native dependencies."
+        />
+        <ToolRow
+          name="Ika CLI + SDK"
+          desc="Clone, compile, and install Ika for the Playground Ika tab and dWallet flows."
+        />
+      </div>
+
+      <Tip type="info">
+        Long toolchain jobs show live progress and logs. If a build fails, copy
+        logs from the progress panel and check the Console page.
+      </Tip>
+
+      <SubTitle>Linking packages to projects</SubTitle>
+      <Prose>
+        In <InlineCode>Projects</InlineCode>, open a project card →{" "}
+        <InlineCode>Link Package</InlineCode> to attach installed SDKs. Linked
+        packages appear in <InlineCode>project_open</InlineCode> responses so
+        agents know which versions are in use.
+      </Prose>
+
+      <SubTitle>MCP tools</SubTitle>
+      <div className="mt-2">
+        <ToolRow
+          name="packages_list_catalog"
+          params=""
+          desc="List available SDK entries with categories and versions."
+        />
+        <ToolRow
+          name="packages_install"
+          params="package_id"
+          desc="Install a catalog package into the local store."
+        />
+        <ToolRow
+          name="packages_install_to_project"
+          params="package_id, project_name"
+          desc="Install and link in one step."
+        />
+        <ToolRow
+          name="packages_link_to_project"
+          params="package_id, project_name"
+          desc="Link an already-installed package to a project."
+        />
+        <ToolRow
+          name="packages_get_toolchain_status"
+          params=""
+          desc="Check which CLIs are installed and their versions."
+        />
+      </div>
+
+      <Tip type="warning">
+        Playground publish will fail if Sui CLI is missing — install it from the
+        Toolchain tab before your first local deploy.
+      </Tip>
+    </div>
+  );
+}
+
+function ToolsSection() {
+  return (
+    <div>
+      <SectionTitle>Tools</SectionTitle>
+      <Prose>
+        The Tools page bundles on-chain utilities for exploring, auditing, and
+        deploying Sui assets. All tools respect the global{" "}
+        <InlineCode>NetworkSwitcher</InlineCode> — pick localnet, testnet,
+        devnet, or mainnet before running queries.
+      </Prose>
+
+      <SubTitle>Transaction Visualizer</SubTitle>
+      <Prose>
+        Enter any Sui address to map incoming and outgoing transfers as an
+        interactive graph. Useful for tracing fund flows, identifying counterparties,
+        and understanding wallet activity before interacting with a contract.
+      </Prose>
+
+      <SubTitle>Token Scanner</SubTitle>
+      <Prose>
+        Paste a coin type or package ID to audit mint authority, upgrade
+        policies, and liquidity risk signals. Returns a color-coded risk level
+        (low → critical) with explanatory flags — handy before swapping or
+        holding unfamiliar tokens.
+      </Prose>
+
+      <SubTitle>RPC Query Builder</SubTitle>
+      <Prose>
+        Build and execute Sui gRPC requests with preset templates (objects,
+        transactions, checkpoints, events). Edit the JSON body, run the query,
+        and inspect formatted responses — a lightweight alternative to grpcurl
+        for debugging RPC behavior on your selected network.
+      </Prose>
+
+      <SubTitle>Token Generator</SubTitle>
+      <Prose>
+        Scaffold and deploy a custom Sui coin: name, symbol, decimals, icon URI,
+        and supply controls. Choose whether the treasury cap stays in your
+        wallet (mint later) or is burned for a fixed supply. Requires a funded
+        wallet on the active network.
+      </Prose>
+
+      <SubTitle>NFT Manager</SubTitle>
+      <Prose>
+        End-to-end generative NFT workflow across five tabs:
+      </Prose>
+      <div className="mt-2">
+        <ToolRow
+          name="Art & Rarity"
+          desc="Layer-based image generation with per-trait rarity weights."
+        />
+        <ToolRow
+          name="Contract"
+          desc="Configure collection metadata and on-chain contract parameters."
+        />
+        <ToolRow
+          name="Walrus Storage"
+          desc="Upload images and metadata blobs to Walrus before mint."
+        />
+        <ToolRow
+          name="Deploy"
+          desc="Publish the collection package to the selected network."
+        />
+        <ToolRow
+          name="Manage"
+          desc="Mint, list, and inspect collection objects after deploy."
+        />
+      </div>
+
+      <SubTitle>MCP tools</SubTitle>
+      <Prose>
+        Scoped endpoint: <InlineCode>/mcp/tools</InlineCode>
+      </Prose>
+      <div className="mt-2">
+        <ToolRow
+          name="tool_scan_token"
+          params="coin_type or package"
+          desc="Run token scanner analysis from an agent."
+        />
+        <ToolRow
+          name="tool_build_token_package"
+          params="metadata, supply options"
+          desc="Generate Move sources for a custom coin."
+        />
+        <ToolRow
+          name="tool_build_nft_package"
+          params="collection config"
+          desc="Generate NFT collection contract sources."
+        />
+        <ToolRow
+          name="tool_grpc_query"
+          params="service, method, request JSON"
+          desc="Execute a gRPC query programmatically."
+        />
+        <ToolRow
+          name="tool_fetch_address_graph"
+          params="address, depth?"
+          desc="Fetch transfer graph data for the visualizer."
+        />
+      </div>
+
+      <Tip type="success">
+        Combine Tools with Playground: generate a token or NFT package here,
+        then load or adapt the Move sources in the Playground for local testing
+        before mainnet deploy.
+      </Tip>
+    </div>
+  );
+}
+
+function AiAssistant() {
   const chatMessages = [
     {
       role: "user",
-      text: "Open the walrus-agent project and check where we left off.",
+      text: "Open my lottery project, recall what we did, and check if localnet is running.",
     },
     {
       role: "ai",
-      text: "Opening the project, then running recall(). [3 results] In the last session we rewrote src/index.ts and extracted helpers.ts. According to WALRUS.md, the error handling layer is still missing.",
+      text: "Opened lottery → recall() returned 4 hits about ticket_price and deploy. Localnet is up on port 9000. Ready to build or test entry functions.",
     },
     {
       role: "user",
-      text: "Save that we handled error handling with try/catch blocks using exponential backoff.",
+      text: "Build the Move package and publish to localnet.",
     },
     {
       role: "ai",
-      text: 'Saved. [remember] → "Error handling: try/catch + exponential backoff (500ms, 1000ms, 2000ms). Blob ID: 0xcee7..."',
+      text: "playground_write_files → playground_build ✓ → playground_publish ✓ Package ID: 0x160b… Remembered the deploy details.",
     },
   ];
 
   return (
     <div>
-      <SectionTitle>AI Interaction</SectionTitle>
+      <SectionTitle>AI Assistant</SectionTitle>
       <Prose>
-        Your AI agent reaches every Walrus Memory feature through MCP.
-        Context never gets lost between sessions — every memory lives on the
-        Walrus network, not in a chat window that disappears.
+        Beluga includes a built-in assistant with access to all MCP tools —
+        projects, memory, Playground, packages, wallet, and dev tools. No external
+        client required for most workflows.
       </Prose>
 
-      <SubTitle>Available actions</SubTitle>
+      <SubTitle>Setup</SubTitle>
+      <Prose>
+        Go to <InlineCode>Settings → AI Assistant</InlineCode>. Choose{" "}
+        <InlineCode>Grok API key</InlineCode> or <InlineCode>Grok Build OAuth</InlineCode>,
+        pick a model, and enable <InlineCode>Allow tool use</InlineCode>. Optional:
+        toggle <InlineCode>Include page context</InlineCode> so the assistant
+        knows which Beluga page you're on.
+      </Prose>
+
+      <SubTitle>What it can do</SubTitle>
       <div className="grid grid-cols-2 gap-3 my-4">
         <MiniCard
-          icon="🗂️"
-          title="Manage projects"
-          desc="List, open, create, delete, and rename projects."
+          icon="📂"
+          title="Project workflows"
+          desc="Open projects, read/write files, recall and remember context."
         />
         <MiniCard
-          icon="📁"
-          title="File operations"
-          desc="Read, write, delete, and rename files. Writes automatically trigger recall + remember."
+          icon="⚡"
+          title="Playground deploy"
+          desc="Write Move files, build, publish, start localnet, test entries."
         />
         <MiniCard
-          icon="💾"
-          title="Remember"
-          desc="Saves text to the Walrus network as a vector embedding. Expected after every decision."
+          icon="📦"
+          title="Package management"
+          desc="Install SDKs, link packages to projects, check toolchain status."
         />
         <MiniCard
-          icon="🔍"
-          title="Recall"
-          desc="Semantic search. Should be called at the start of every session, before the AI does anything else."
-        />
-        <MiniCard
-          icon="🔬"
-          title="Analyze"
-          desc="Extracts discrete facts from a longer passage of text and saves each one individually."
-        />
-        <MiniCard
-          icon="❤️"
-          title="Health check"
-          desc="Returns relayer connectivity and account status. Useful for diagnostics."
+          icon="🔧"
+          title="Dev tools"
+          desc="Token scanner, gRPC queries, wallet faucet, NFT/token generators."
         />
       </div>
 
       <Tip type="info">
-        Use explicit language when you want something saved — phrases like{" "}
-        <em>"save that"</em> or <em>"remember this"</em> — so the agent knows
-        when to call <InlineCode>remember()</InlineCode> versus just
-        responding conversationally.
+        Tool calls appear as expandable cards in the chat — click to inspect
+        arguments and responses. Pin chats in the history sidebar to keep
+        long-running tasks organized.
       </Tip>
 
-      <SubTitle>Natural language examples</SubTitle>
+      <SubTitle>Example conversation</SubTitle>
       <div className="flex flex-col gap-3 mt-3">
         {chatMessages.map((msg, i) => (
           <div
@@ -566,16 +977,16 @@ function AiInteraction() {
           >
             <div
               className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 mt-0.5 ${
-                msg.role === "ai" ? "bg-[#1c3a5c]" : "bg-[#2a2a3c]"
+                msg.role === "ai" ? "bg-[#6c63ff]/30" : "bg-[#2a2a3c]"
               }`}
             >
-              {msg.role === "ai" ? "🦭" : "👤"}
+              {msg.role === "ai" ? "✨" : "👤"}
             </div>
             <div
               className={`max-w-[82%] px-4 py-3 rounded-xl text-[13px] leading-relaxed ${
                 msg.role === "ai"
                   ? "bg-[#1c1c2a] border border-[#2a2a3c] text-[#c0c0d0]"
-                  : "bg-[#4ca3ff]/10 border border-[#4ca3ff]/20 text-[#c0d4e8]"
+                  : "bg-[#6c63ff]/10 border border-[#6c63ff]/20 text-[#c0d4e8]"
               }`}
             >
               {msg.text}
@@ -588,98 +999,61 @@ function AiInteraction() {
 }
 
 function McpIntegration() {
-  const tools = [
-    {
-      name: "project_list",
-      params: "",
-      desc: "Lists all projects with name, path, file count, and last-modified date.",
-    },
+  const coreTools = [
     {
       name: "project_open",
       params: "project_name",
-      desc: "Opens a project — returns the file tree and memory credentials. Pass these along to every subsequent call.",
+      desc: "Opens a project — returns file tree, memory credentials, and linked skills/packages.",
     },
     {
-      name: "project_create",
-      params: "project_name",
-      desc: "Creates a new project with starter files (WALRUS.md, CLAUDE.md, README.md).",
+      name: "file_read / file_write",
+      params: "project_name, file_path, …",
+      desc: "Read and write project files. Writes can auto-trigger recall + remember when credentials are set.",
     },
     {
-      name: "project_delete",
-      params: "project_name",
-      desc: "Deletes a project — irreversible.",
+      name: "remember / recall",
+      params: "text or query, accountId, delegateKey",
+      desc: "Persist and search Walrus Memory. Recall at session start; remember after every decision.",
     },
     {
-      name: "project_rename",
-      params: "old_name, new_name",
-      desc: "Renames a project.",
+      name: "skill_list / skill_get",
+      params: "skill_id?",
+      desc: "List available skills or fetch full SKILL.md instructions by id.",
+    },
+  ];
+
+  const scopedTools = [
+    {
+      name: "playground_build / playground_publish",
+      params: "files[]",
+      desc: "Compile and deploy Move packages from the Playground workspace.",
     },
     {
-      name: "file_read",
-      params: "project_name, file_path",
-      desc: "Reads the contents of a file. The path is relative to the project root.",
-    },
-    {
-      name: "file_write",
-      params: "project_name, file_path, content, accountId, delegateKey",
-      desc: "Creates or overwrites a file. If accountId/delegateKey are provided, recall + remember run automatically.",
-    },
-    {
-      name: "file_delete",
-      params: "project_name, file_path",
-      desc: "Deletes a file from the project.",
-    },
-    {
-      name: "file_rename",
-      params: "project_name, old_path, new_path",
-      desc: "Renames or moves a file within the project.",
-    },
-    {
-      name: "folder_create",
-      params: "project_name, folder_path",
-      desc: "Creates a folder (and any intermediate folders) within the project.",
-    },
-    {
-      name: "folder_delete",
-      params: "project_name, folder_path",
-      desc: "Deletes a folder and all of its contents — irreversible.",
-    },
-    {
-      name: "folder_rename",
-      params: "project_name, old_path, new_path",
-      desc: "Renames or moves a folder within the project.",
-    },
-    {
-      name: "remember",
-      params: "text, accountId, delegateKey, namespace?",
-      desc: "Saves text to the Walrus network as a vector embedding. Expected after every decision or change.",
-    },
-    {
-      name: "recall",
-      params: "query, accountId, delegateKey, limit?",
-      desc: "Semantic search. Call this at the very start of a session, before the AI takes any action.",
-    },
-    {
-      name: "analyze",
-      params: "text, accountId, delegateKey",
-      desc: "Extracts facts from text and saves each one as a separate blob.",
-    },
-    {
-      name: "get_health",
-      params: "accountId, delegateKey",
-      desc: "Returns relayer connectivity and account status.",
-    },
-    {
-      name: "get_account_info",
+      name: "playground_start_sui_localnet",
       params: "",
-      desc: "Returns the current wallet address, account ID, and network details.",
+      desc: "Start Sui localnet for testing publishes and entry functions.",
+    },
+    {
+      name: "packages_install",
+      params: "package_id, project_name?",
+      desc: "Install an SDK package and optionally link it to a project.",
+    },
+    {
+      name: "wallet_request_faucet",
+      params: "network?",
+      desc: "Fund the Beluga wallet on testnet/devnet/localnet.",
+    },
+    {
+      name: "tool_scan_token",
+      params: "address",
+      desc: "Scan a wallet for token holdings via the Tools module.",
     },
   ];
 
   const claudeConfig = `// ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
-    "walrus-memory": {
+    "beluga": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -690,10 +1064,10 @@ function McpIntegration() {
   }
 }`;
 
-  const cursorConfig = `// .cursor/mcp.json (at the project root)
+  const cursorConfig = `// .cursor/mcp.json (project root or global)
 {
   "mcpServers": {
-    "walrus-memory": {
+    "beluga": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -708,60 +1082,77 @@ function McpIntegration() {
     <div>
       <SectionTitle>MCP Integration</SectionTitle>
       <Prose>
-        The Model Context Protocol lets any MCP-compatible AI — Claude,
-        Cursor, VS Code — connect directly to Walrus Memory's features.
+        Beluga runs an MCP server on port <InlineCode>47823</InlineCode> while
+        the app is open. External agents — Cursor, Claude Desktop, VS Code —
+        get the same tools as the built-in AI Assistant.
       </Prose>
 
+      <Tip type="info">
+        Beluga must be running for MCP to work. Check{" "}
+        <InlineCode>Settings → MCP endpoint</InlineCode> for the live URL and
+        connection test.
+      </Tip>
+
       <Card>
-        <CardHeader>Supported clients</CardHeader>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            {
-              name: "Claude Desktop",
-              status: "supported",
-              color: "teal" as const,
-            },
-            {
-              name: "Cursor / VS Code",
-              status: "supported",
-              color: "teal" as const,
-            },
-            {
-              name: "GPT-4 (OpenAI)",
-              status: "coming soon",
-              color: "orange" as const,
-            },
-          ].map((item) => (
-            <div key={item.name} className="bg-[#0d0d18] rounded-xl p-3">
-              <p className="text-[12px] font-medium text-[#f0f0f5] mb-2">
-                {item.name}
-              </p>
-              <Badge color={item.color}>{item.status}</Badge>
-            </div>
-          ))}
+        <CardHeader>Scoped endpoints</CardHeader>
+        <Prose>
+          Use a scoped URL when an agent only needs one area. Playground scope
+          includes core project tools.
+        </Prose>
+        <div className="mt-3 space-y-1.5 text-[12px] font-mono text-[#a8d4ff]">
+          <p>
+            <CopyChip text="http://0.0.0.0:47823/mcp" /> — all tools
+          </p>
+          <p>
+            <CopyChip text="http://0.0.0.0:47823/mcp/core" /> — projects,
+            memory, files, skills
+          </p>
+          <p>
+            <CopyChip text="http://0.0.0.0:47823/mcp/playground" /> —
+            localnet, Move build/publish
+          </p>
+          <p>
+            <CopyChip text="http://0.0.0.0:47823/mcp/packages" /> — SDK
+            install/link
+          </p>
+          <p>
+            <CopyChip text="http://0.0.0.0:47823/mcp/tools" /> — token
+            scanner, gRPC, generators
+          </p>
+          <p>
+            <CopyChip text="http://0.0.0.0:47823/mcp/wallet" /> — balance,
+            faucet, send SUI
+          </p>
         </div>
       </Card>
 
-      <SubTitle>Setting up Claude Desktop</SubTitle>
-      <Prose>
-        Open the configuration file and add the Walrus Memory MCP server:
-      </Prose>
+      <SubTitle>Claude Desktop</SubTitle>
       <CodeBlock language="json" code={claudeConfig} />
 
-      <Tip type="success">
-        After restarting, Claude Desktop's sidebar will show the 🦭 Walrus
-        Memory server. From there you can just say:{" "}
-        <em className="text-[#00d4aa]">
-          "Open the project and check where we left off."
-        </em>
-      </Tip>
-
-      <SubTitle>Cursor / VS Code integration</SubTitle>
+      <SubTitle>Cursor / VS Code</SubTitle>
       <CodeBlock language="json" code={cursorConfig} />
 
-      <SubTitle>Available MCP tools</SubTitle>
+      <Tip type="success">
+        For Playground-only work in Cursor, point at{" "}
+        <InlineCode>/mcp/playground</InlineCode> — fewer tools, less noise for
+        the model.
+      </Tip>
+
+      <SubTitle>Core tools</SubTitle>
       <div className="mt-2">
-        {tools.map((t) => (
+        {coreTools.map((t) => (
+          <ToolRow
+            key={t.name}
+            name={t.name}
+            params={t.params || undefined}
+            desc={t.desc}
+          />
+        ))}
+      </div>
+
+      <SubTitle>Playground, packages &amp; tools</SubTitle>
+      <div className="mt-2">
+        {scopedTools.map((t) => (
           <ToolRow
             key={t.name}
             name={t.name}
@@ -772,111 +1163,109 @@ function McpIntegration() {
       </div>
 
       <Tip type="warning">
-        Always take the values for <InlineCode>accountId</InlineCode> and{" "}
-        <InlineCode>delegateKey</InlineCode> from the{" "}
-        <InlineCode>project_open</InlineCode> response — without them, Walrus
-        Memory calls fail silently and context gets lost.
+        Always pass <InlineCode>accountId</InlineCode> and{" "}
+        <InlineCode>delegateKey</InlineCode> from{" "}
+        <InlineCode>project_open</InlineCode> into memory calls — without them,
+        context won't persist between sessions.
       </Tip>
     </div>
   );
 }
 
 function Advanced() {
-  const handoffSnippet = `1. Run get_account_info to confirm which wallet/account is active.
-2. Run project_open("your-project") to fetch the file tree
-   and memory credentials (accountId, delegateKey).
-3. Run recall({ query: "current state and next steps", limit: 10 })
-   before touching any files.
-4. Continue from there — the new agent now has full context,
-   even though it never saw the previous conversation.`;
+  const deployFlow = `Playground deploy (agent or manual):
+1. playground_start_sui_localnet      — start Sui localnet if needed
+2. wallet_request_faucet              — fund wallet on localnet
+3. project_open("my-project")         — get memory creds + file context
+4. recall({ query: "deploy state" })  — pull prior decisions
+5. playground_write_files({ files })  — sync Move sources to workspace
+6. playground_build({ files })        — compile; fix errors if any
+7. playground_publish({ files })      — deploy; save package ID via remember()`;
+
+  const handoffSnippet = `1. project_open("your-project") — file tree + memory credentials
+2. recall({ query: "current state, deploy IDs, open tasks", limit: 10 })
+3. Continue work — context lives on Walrus, not in the chat window`;
 
   return (
     <div>
-      <SectionTitle>Advanced Usage</SectionTitle>
+      <SectionTitle>Common Workflows</SectionTitle>
       <Prose>
-        Once the basics are working, the biggest gains come from how you talk
-        to your agent and how you structure handoffs between sessions, tools,
-        or even different AI models entirely.
+        Beluga shines when memory, projects, and Playground work together.
+        These patterns work in the built-in assistant and any MCP client.
       </Prose>
 
-      <SubTitle>Prompting tips</SubTitle>
+      <SubTitle>Playground deploy flow</SubTitle>
       <Prose>
-        Walrus Memory only saves what the agent decides to save, and only
-        finds what it's told to look for. A few habits make a real
-        difference:
+        The standard path from Move source to on-chain package on localnet:
+      </Prose>
+      <CodeBlock language="text" code={deployFlow} />
+
+      <Tip type="warning">
+        Move 2024 requires <InlineCode>public</InlineCode> visibility on structs
+        used across modules. Use <InlineCode>vector[]</InlineCode> syntax, not{" "}
+        <InlineCode>vector::empty()</InlineCode>, in entry arguments where
+        applicable.
+      </Tip>
+
+      <SubTitle>Linking packages &amp; skills</SubTitle>
+      <Prose>
+        Install SDKs in <InlineCode>Packages</InlineCode>, then link them to a
+        project from the project card or via{" "}
+        <InlineCode>packages_link_to_project</InlineCode>. Link Skills from
+        the project card in the UI — agents read attached skills via{" "}
+        <InlineCode>project_open</InlineCode> and <InlineCode>skill_get</InlineCode>.
       </Prose>
 
+      <SubTitle>Prompting habits</SubTitle>
       <div className="grid grid-cols-2 gap-3 my-4">
         <MiniCard
-          icon="🎯"
-          title="Be explicit about saving"
-          desc='Say "save this" or "remember this for later" rather than assuming the agent will store something on its own.'
-        />
-        <MiniCard
           icon="🔁"
-          title="Open with a recall"
-          desc='Start new sessions with "check where we left off" so the agent pulls context before acting.'
+          title="Recall first"
+          desc='Start sessions with "check where we left off" — agents should recall before editing.'
         />
         <MiniCard
-          icon="🧩"
-          title="Name the namespace"
-          desc='For multi-project work, say which namespace applies: "save this under the research namespace."'
+          icon="💾"
+          title="Remember outcomes"
+          desc='After deploys or decisions: "remember the package ID and what changed."'
+        />
+        <MiniCard
+          icon="📦"
+          title="Name the project"
+          desc="Always say which project to open — Beluga has no implicit active project for agents."
         />
         <MiniCard
           icon="🧾"
-          title="Ask for a summary, not a dump"
-          desc="Long debugging sessions produce noise. Ask the agent to summarize the outcome before it saves, not the full transcript."
+          title="Summarize before saving"
+          desc="Ask for a short summary of a long debug session before calling remember()."
         />
       </div>
 
       <SubTitle>Example prompts</SubTitle>
       <PromptExample
-        prompt="Before we start, recall anything related to the auth refactor and summarize it."
-        note="Forces an explicit recall() at the start of a session instead of relying on the agent to remember on its own."
+        prompt="Open lottery-project, recall deploy history, start localnet if needed, and publish the current Move code."
+        note="Full Playground workflow in one instruction — works in AI Assistant or Cursor with /mcp/playground."
       />
       <PromptExample
-        prompt="We decided to use exponential backoff for retries — 500ms, 1000ms, 2000ms. Remember that under the agent-learnings namespace."
-        note="Gives the agent a clear instruction, a concrete fact, and a target namespace in one sentence."
+        prompt="Install the latest Sui framework package and link it to my-token-project."
+        note="Packages manager action via MCP — no manual Move.toml editing."
       />
       <PromptExample
-        prompt="Read WALRUS.md, then analyze it and save anything that looks like an open task."
-        note="Combines file_read with analyze() to turn a loosely written project file into discrete, searchable memories."
-      />
-      <PromptExample
-        prompt="Don't write any code yet. First check get_health and confirm the account is reachable."
-        note="Useful when something feels off — catches connectivity issues before the agent burns a turn on a failed write."
+        prompt="Remember: package ID 0x160b…, entry functions are create_lottery(u64), buy_ticket, draw_winner."
+        note="Explicit remember after a deploy so the next session knows callable functions."
       />
 
       <SubTitle>Switching agents mid-task</SubTitle>
       <Prose>
-        Because context lives on the Walrus network and not inside any one
-        chat session, you're never locked into a single AI. If you run out of
-        tokens, hit a rate limit, or just want to switch from Claude to Cursor
-        partway through a task, a new agent can pick up exactly where the
-        last one stopped.
-      </Prose>
-
-      <Tip type="info">
-        The handoff works because memory is keyed to your{" "}
-        <InlineCode>accountId</InlineCode> and project — not to a specific
-        chat. Any MCP-compatible agent that opens the same project gets the
-        same memories.
-      </Tip>
-
-      <Prose>
-        A typical handoff sequence for the new agent looks like this:
+        Memory is on Walrus, keyed to your project — not to a chat. Switch from
+        the built-in assistant to Cursor (or vice versa) anytime:
       </Prose>
       <CodeBlock language="text" code={handoffSnippet} />
 
       <Tip type="success">
-        In practice, you can just tell the new agent:{" "}
+        Shorthand for any new agent:{" "}
         <em className="text-[#00d4aa]">
-          "Open the [project name] project and continue from where the last
-          session left off."
-        </em>{" "}
-        It will call <InlineCode>project_open</InlineCode> and{" "}
-        <InlineCode>recall</InlineCode> on its own and reconstruct the
-        context from there.
+          "Open [project] and continue where we left off."
+        </em>
       </Tip>
     </div>
   );
@@ -896,8 +1285,16 @@ export function DocsPage() {
     switch (active) {
       case "getting-started":
         return <GettingStarted />;
-      case "ai-interaction":
-        return <AiInteraction />;
+      case "modules":
+        return <Modules />;
+      case "playground":
+        return <PlaygroundSection />;
+      case "packages":
+        return <PackagesSection />;
+      case "tools":
+        return <ToolsSection />;
+      case "ai-assistant":
+        return <AiAssistant />;
       case "mcp-integration":
         return <McpIntegration />;
       case "advanced":
@@ -945,8 +1342,9 @@ export function DocsPage() {
               Quick links
             </p>
             {[
-              { label: "Walrus Playground", href: "https://memory.walrus.xyz" },
-              { label: "Github", href: "https://modelcontextprotocol.io" },
+              { label: "Sui Docs", href: "https://docs.sui.io" },
+              { label: "Walrus Memory", href: "https://memory.walrus.xyz" },
+              { label: "MCP Specification", href: "https://modelcontextprotocol.io" },
             ].map((link) => (
               <a
                 key={link.label}

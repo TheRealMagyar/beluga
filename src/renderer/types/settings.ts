@@ -6,6 +6,22 @@ export type WalrusNetworkConfig = {
   rpc: string;
 };
 
+export type AiAuthMode = "grok-build" | "api-key";
+
+export type AiSettings = {
+  enabled: boolean;
+  authMode: AiAuthMode;
+  apiKey: string;
+  model: string;
+  includePageContext: boolean;
+  allowToolUse: boolean;
+};
+
+export type GitHubSettings = {
+  clientId: string;
+  clientSecret: string;
+};
+
 export type AppSettings = {
   autoLaunch: boolean;
   startMinimized: boolean;
@@ -14,6 +30,8 @@ export type AppSettings = {
     mainnet: WalrusNetworkConfig;
     testnet: WalrusNetworkConfig;
   };
+  ai: AiSettings;
+  github: GitHubSettings;
 };
 
 export type WalrusNetwork = "mainnet" | "testnet";

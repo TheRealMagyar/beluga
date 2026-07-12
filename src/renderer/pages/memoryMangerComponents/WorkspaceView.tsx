@@ -1,10 +1,10 @@
-import React from "react";
 import {
   Save, Search, Brain, Loader2, CheckCircle2, XCircle, Info,
-  Wifi, WifiOff, Pencil,
+  Wifi, WifiOff,
 } from "lucide-react";
 import type { MemoryEntry, Tab, RecallResult, AnalyzedFact } from "./types";
 import { shortHex } from "./utils";
+import { NetworkBadge, PrimaryButton } from "./memory-ui";
 
 interface WorkspaceViewProps {
   entry: MemoryEntry | null;
@@ -29,20 +29,20 @@ interface WorkspaceViewProps {
 }
 
 const TABS = [
-  { id: "remember", Icon: Save,   label: "Remember" },
-  { id: "recall",   Icon: Search, label: "Recall"   },
-  { id: "analyze",  Icon: Brain,  label: "Analyze"  },
+  { id: "remember", Icon: Save, label: "Remember" },
+  { id: "recall", Icon: Search, label: "Recall" },
+  { id: "analyze", Icon: Brain, label: "Analyze" },
 ] as const;
 
 const LOG_STYLES = {
-  success: { bg: "bg-[#00d4aa0f]", border: "border-l-[#00d4aa]", text: "text-[#00d4aa]" },
-  error:   { bg: "bg-[#ff4d6d0f]", border: "border-l-[#ff4d6d]", text: "text-[#ff4d6d]" },
-  info:    { bg: "bg-[#4ca3ff0f]", border: "border-l-[#4ca3ff]", text: "text-[#4ca3ff]" },
+  success: { bg: "bg-[#00d4aa0f]", text: "text-[#00d4aa]", Icon: CheckCircle2 },
+  error: { bg: "bg-[#ff4d6d0f]", text: "text-[#ff4d6d]", Icon: XCircle },
+  info: { bg: "bg-[#6c63ff0f]", text: "text-[#9d97ff]", Icon: Info },
 };
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-[#1e1e1e] border border-[#2a2a3c] rounded-[16px] p-5 ${className}`}>
+    <div className={`rounded-2xl border border-[#2a2a2a] bg-[#1e1e1e] p-5 ${className}`}>
       {children}
     </div>
   );
@@ -50,29 +50,27 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-bold text-[#555570] uppercase tracking-[1.2px] mb-3">
+    <p className="text-[10px] font-bold text-[#55556a] uppercase tracking-[1px] mb-3">
       {children}
     </p>
   );
 }
 
-function PrimaryBtn({
-  onClick, disabled, loading: busy, children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  children: React.ReactNode;
-}) {
+function RelevanceBadge({ distance }: { distance: number }) {
+  const relevance = Math.round((1 - distance) * 100);
+  const isPrimary = distance < 0.3;
+  const isMid = distance < 0.5;
+  const tone = isPrimary ? "ok" : isMid ? "warn" : "error";
+  const styles = {
+    ok: "border-[#00d4aa]/30 text-[#00d4aa] bg-[#00d4aa]/10",
+    warn: "border-[#ffb347]/30 text-[#ffb347] bg-[#ffb347]/10",
+    error: "border-[#ff4d6d]/30 text-[#ff8fa3] bg-[#ff4d6d]/10",
+  }[tone];
+
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="flex items-center gap-2 bg-gradient-to-br from-[#6c63ff] to-[#5148d4] text-white rounded-[10px] px-4 py-2 text-[13px] font-semibold disabled:opacity-40 active:scale-[0.97] transition-transform"
-    >
-      {busy && <Loader2 size={13} className="animate-spin" />}
-      {children}
-    </button>
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${styles}`}>
+      {relevance}% match
+    </span>
   );
 }
 
@@ -88,8 +86,8 @@ export function WorkspaceView({
 }: WorkspaceViewProps) {
   if (!entry) {
     return (
-      <div className="max-w-[1100px] mx-auto px-6 py-16 text-center text-[#8888a0] text-[14px]">
-        Select a memory fragment in the Manager.
+      <div className="flex items-center justify-center py-24 text-[#8888a0] text-[14px]">
+        Select a memory fragment to open the workspace.
       </div>
     );
   }
@@ -97,51 +95,55 @@ export function WorkspaceView({
   const isOk = health === "ok";
 
   return (
-    <div className="max-w-[1100px] mx-auto px-6 py-8 pb-20 grid grid-cols-[280px_1fr] gap-6">
+    <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5 packages-panel-in">
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <div className="flex flex-col gap-4">
-
-        {/* Active fragment info */}
         <Card>
-          <SectionLabel>Active Fragment</SectionLabel>
-          <div className="text-[16px] font-semibold text-[#f0f0f5] mb-3">{entry.label}</div>
+          <SectionLabel>Fragment</SectionLabel>
+          <div className="text-[15px] font-semibold text-[#f0f0f5] mb-2 truncate">
+            {entry.label}
+          </div>
+          <div className="mb-4">
+            <NetworkBadge network={entry.network} />
+          </div>
 
-          {/* Health indicator */}
-          <div className="flex items-center gap-2 mb-4">
-            {isOk
-              ? <Wifi size={13} className="text-[#00d4aa] shrink-0" />
-              : <WifiOff size={13} className="text-[#ffb347] shrink-0" />}
-            <span className={`text-[12px] ${isOk ? "text-[#00d4aa]" : "text-[#ffb347]"}`}>
+          <div className="flex items-center gap-2 mb-4 rounded-xl border border-[#2a2a2a] bg-[#161616]/80 px-3 py-2">
+            {isOk ? (
+              <Wifi size={13} className="text-[#00d4aa] shrink-0" />
+            ) : (
+              <WifiOff size={13} className="text-[#ffb347] shrink-0" />
+            )}
+            <span className={`text-[11px] ${isOk ? "text-[#00d4aa]" : "text-[#ffb347]"}`}>
               Relayer: {health || "connecting…"}
             </span>
           </div>
 
-          {/* Namespace */}
-          <p className="text-[11px] text-[#555570] mb-1.5">Namespace</p>
+          <p className="text-[10px] text-[#55556a] mb-1.5">Namespace</p>
           <input
             value={entry.namespace}
             onChange={(e) => onNamespaceChange(e.target.value)}
             placeholder="default"
-            className="w-full border border-[#2a2a3c] bg-[#111111] text-[#f0f0f5] rounded-[10px] px-3 py-2 text-[13px] outline-none focus:border-[#6c63ff] placeholder:text-[#555570] transition-colors"
+            className="w-full border border-[#2a2a2a] bg-[#161616] text-[#f0f0f5] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#6c63ff]/50 placeholder:text-[#55556a]"
           />
         </Card>
 
-        {/* Log */}
-        <Card>
-          <SectionLabel>Log</SectionLabel>
-          <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+        <Card className="flex-1 min-h-0">
+          <SectionLabel>Activity log</SectionLabel>
+          <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto scrollbar-none">
             {log.length === 0 ? (
-              <span className="text-[12px] text-[#555570]">No activity yet</span>
+              <span className="text-[11px] text-[#55556a]">No activity yet</span>
             ) : (
               log.map((l, i) => {
                 const s = LOG_STYLES[l.type];
+                const LogIcon = s.Icon;
                 return (
                   <div
                     key={i}
-                    className={`text-[11px] font-mono px-2 py-1 rounded-[5px] leading-snug border-l-2 ${s.bg} ${s.border} ${s.text}`}
+                    className={`flex items-start gap-2 text-[11px] font-mono px-2.5 py-1.5 rounded-lg leading-snug ${s.bg} ${s.text}`}
                   >
-                    {l.msg}
+                    <LogIcon size={12} className="shrink-0 mt-0.5 opacity-80" />
+                    <span className="break-words">{l.msg}</span>
                   </div>
                 );
               })
@@ -150,27 +152,28 @@ export function WorkspaceView({
         </Card>
       </div>
 
-      {/* ── Main panel ── */}
+      {/* Main panel */}
       <div>
         {!isReady ? (
-          <Card className="flex flex-col items-center justify-center py-16 text-center">
-            <Loader2 size={32} className="text-[#6c63ff] animate-spin mb-4" />
-            <div className="text-[#8888a0] text-[14px]">Connecting to relayer…</div>
+          <Card className="flex flex-col items-center justify-center py-20 text-center">
+            <Loader2 size={28} className="text-[#6c63ff] animate-spin mb-4" />
+            <div className="text-[#8888a0] text-[13px]">Connecting to relayer…</div>
           </Card>
         ) : (
           <>
-            {/* Tab strip */}
-            <div className="flex gap-1 mb-5 bg-[#1e1e1e] border border-[#2a2a3c] rounded-[12px] p-1">
+            <div className="flex gap-1 mb-5 rounded-xl border border-[#2a2a2a] bg-[#1e1e1e] p-1">
               {TABS.map(({ id, Icon, label }) => {
                 const active = tab === id;
                 return (
                   <button
                     key={id}
+                    type="button"
                     onClick={() => setTab(id)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[9px] text-[13px] font-medium transition-colors
-                      ${active
-                        ? "bg-[#6c63ff] text-white"
-                        : "text-[#8888a0] hover:text-[#f0f0f5] hover:bg-[#2a2a3c]"}`}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-medium cursor-pointer ${
+                      active
+                        ? "bg-[#6c63ff]/20 text-[#b8b0ff] border border-[#6c63ff]/30"
+                        : "text-[#8888a0] hover:text-[#f0f0f5] hover:bg-white/[0.03] border border-transparent"
+                    }`}
                   >
                     <Icon size={14} />
                     {label}
@@ -179,41 +182,45 @@ export function WorkspaceView({
               })}
             </div>
 
-            {/* ── Remember tab ── */}
             {tab === "remember" && (
               <Card>
                 <div className="flex items-center gap-2 mb-1">
                   <Save size={16} className="text-[#6c63ff]" />
-                  <span className="text-[16px] font-semibold text-[#f0f0f5]">Save Memory</span>
+                  <span className="text-[15px] font-semibold text-[#f0f0f5]">Save Memory</span>
                 </div>
-                <p className="text-[13px] text-[#8888a0] mb-5 leading-relaxed">
-                  Vectorized, encrypted, and stored in a decentralized manner on the Walrus network.
+                <p className="text-[12px] text-[#8888a0] mb-5 leading-relaxed">
+                  Vectorized, encrypted, and stored on the Walrus network.
                 </p>
                 <textarea
                   value={rememberText}
                   onChange={(e) => setRememberText(e.target.value)}
                   placeholder="E.g.: The user works in TypeScript and prefers dark mode..."
                   rows={5}
-                  className="w-full border border-[#2a2a3c] bg-[#111111] text-[#f0f0f5] rounded-[10px] px-3 py-2.5 text-[13px] outline-none focus:border-[#6c63ff] placeholder:text-[#555570] resize-y leading-relaxed mb-4 transition-colors"
+                  className="w-full border border-[#2a2a2a] bg-[#161616] text-[#f0f0f5] rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-[#6c63ff]/50 placeholder:text-[#55556a] resize-y leading-relaxed mb-4"
                 />
                 <div className="flex items-center gap-3">
-                  <PrimaryBtn onClick={handleRemember} disabled={loading || !rememberText.trim()} loading={loading}>
+                  <PrimaryButton
+                    onClick={handleRemember}
+                    disabled={loading || !rememberText.trim()}
+                    loading={loading}
+                    tone="blue"
+                    className="!border-[#6c63ff]/40 !bg-[#6c63ff]/20 !text-[#b8b0ff] hover:!bg-[#6c63ff]/28"
+                  >
                     <Save size={13} /> Save to Walrus
-                  </PrimaryBtn>
-                  <span className="text-[12px] text-[#555570]">{rememberText.length} characters</span>
+                  </PrimaryButton>
+                  <span className="text-[11px] text-[#55556a]">{rememberText.length} characters</span>
                 </div>
               </Card>
             )}
 
-            {/* ── Recall tab ── */}
             {tab === "recall" && (
               <Card>
                 <div className="flex items-center gap-2 mb-1">
                   <Search size={16} className="text-[#6c63ff]" />
-                  <span className="text-[16px] font-semibold text-[#f0f0f5]">Memory Recall</span>
+                  <span className="text-[15px] font-semibold text-[#f0f0f5]">Memory Recall</span>
                 </div>
-                <p className="text-[13px] text-[#8888a0] mb-5 leading-relaxed">
-                  Using natural language queries based on semantic similarity.
+                <p className="text-[12px] text-[#8888a0] mb-5 leading-relaxed">
+                  Search using natural language queries based on semantic similarity.
                 </p>
                 <div className="flex gap-2 mb-5">
                   <input
@@ -221,48 +228,39 @@ export function WorkspaceView({
                     onChange={(e) => setRecallQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleRecall()}
                     placeholder="What do we know about the user's preferences?"
-                    className="flex-1 border border-[#2a2a3c] bg-[#111111] text-[#f0f0f5] rounded-[10px] px-3 py-2 text-[13px] outline-none focus:border-[#6c63ff] placeholder:text-[#555570] transition-colors"
+                    className="flex-1 border border-[#2a2a2a] bg-[#161616] text-[#f0f0f5] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#6c63ff]/50 placeholder:text-[#55556a]"
                   />
-                  <PrimaryBtn onClick={handleRecall} disabled={loading || !recallQuery.trim()} loading={loading}>
+                  <PrimaryButton
+                    onClick={handleRecall}
+                    disabled={loading || !recallQuery.trim()}
+                    loading={loading}
+                    tone="blue"
+                    className="!border-[#6c63ff]/40 !bg-[#6c63ff]/20 !text-[#b8b0ff] hover:!bg-[#6c63ff]/28"
+                  >
                     <Search size={13} /> Search
-                  </PrimaryBtn>
+                  </PrimaryButton>
                 </div>
 
                 {recallResults.length > 0 ? (
                   <div className="flex flex-col gap-3">
-                    {recallResults.map((r, i) => {
-                      const relevance = Math.round((1 - r.distance) * 100);
-                      const isPrimary = r.distance < 0.3;
-                      const isMid     = r.distance < 0.5;
-                      return (
-                        <div
-                          key={i}
-                          className="bg-[#161616] border border-[#2a2a3c] border-l-[3px] rounded-[12px] p-4"
-                          style={{ borderLeftColor: isPrimary ? "#00d4aa" : isMid ? "#ffb347" : "#ff4d6d" }}
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-[11px] font-mono text-[#555570]">
-                              {shortHex(r.blob_id || "", 8, 6)}
-                            </span>
-                            <span
-                              className="text-[10px] font-bold uppercase tracking-[0.8px] px-2 py-[3px] rounded-[6px]"
-                              style={
-                                isPrimary ? { background: "#00d4aa1a", color: "#00d4aa" }
-                                : isMid   ? { background: "#ffb3471a", color: "#ffb347" }
-                                :           { background: "#ff4d6d1a", color: "#ff4d6d" }
-                              }
-                            >
-                              {relevance}% relevance
-                            </span>
-                          </div>
-                          <div className="text-[14px] text-[#f0f0f5] leading-relaxed">{r.text}</div>
+                    {recallResults.map((r, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl border border-[#2a2a2a] bg-[#161616]/80 p-4"
+                      >
+                        <div className="flex justify-between items-center gap-2 mb-2">
+                          <span className="text-[10px] font-mono text-[#55556a]">
+                            {shortHex(r.blob_id || "", 8, 6)}
+                          </span>
+                          <RelevanceBadge distance={r.distance} />
                         </div>
-                      );
-                    })}
+                        <div className="text-[13px] text-[#f0f0f5] leading-relaxed">{r.text}</div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   !loading && (
-                    <div className="text-center py-10 text-[#555570] text-[14px]">
+                    <div className="text-center py-10 text-[#55556a] text-[13px]">
                       Enter a query to search
                     </div>
                   )
@@ -270,14 +268,13 @@ export function WorkspaceView({
               </Card>
             )}
 
-            {/* ── Analyze tab ── */}
             {tab === "analyze" && (
               <Card>
                 <div className="flex items-center gap-2 mb-1">
                   <Brain size={16} className="text-[#6c63ff]" />
-                  <span className="text-[16px] font-semibold text-[#f0f0f5]">Analyze Text</span>
+                  <span className="text-[15px] font-semibold text-[#f0f0f5]">Analyze Text</span>
                 </div>
-                <p className="text-[13px] text-[#8888a0] mb-5 leading-relaxed">
+                <p className="text-[12px] text-[#8888a0] mb-5 leading-relaxed">
                   The AI extracts facts and saves each one as a separate memory.
                 </p>
                 <textarea
@@ -285,24 +282,30 @@ export function WorkspaceView({
                   onChange={(e) => setAnalyzeText(e.target.value)}
                   placeholder="E.g.: Peter is a 32-year-old developer from Budapest. He uses TypeScript and React..."
                   rows={5}
-                  className="w-full border border-[#2a2a3c] bg-[#111111] text-[#f0f0f5] rounded-[10px] px-3 py-2.5 text-[13px] outline-none focus:border-[#6c63ff] placeholder:text-[#555570] resize-y leading-relaxed mb-4 transition-colors"
+                  className="w-full border border-[#2a2a2a] bg-[#161616] text-[#f0f0f5] rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-[#6c63ff]/50 placeholder:text-[#55556a] resize-y leading-relaxed mb-4"
                 />
-                <PrimaryBtn onClick={handleAnalyze} disabled={loading || !analyzeText.trim()} loading={loading}>
+                <PrimaryButton
+                  onClick={handleAnalyze}
+                  disabled={loading || !analyzeText.trim()}
+                  loading={loading}
+                  tone="blue"
+                  className="!border-[#6c63ff]/40 !bg-[#6c63ff]/20 !text-[#b8b0ff] hover:!bg-[#6c63ff]/28"
+                >
                   <Brain size={13} /> Analyze &amp; Save
-                </PrimaryBtn>
+                </PrimaryButton>
 
                 {analyzeFacts.length > 0 && (
                   <div className="mt-5">
-                    <p className="text-[12px] font-semibold text-[#555570] mb-3">
-                      Extracted facts ({analyzeFacts.length} items)
+                    <p className="text-[11px] font-semibold text-[#55556a] mb-3">
+                      Extracted facts ({analyzeFacts.length})
                     </p>
                     <div className="flex flex-col gap-2">
                       {analyzeFacts.map((f, i) => (
                         <div
                           key={i}
-                          className="bg-[#161616] border border-[#2a2a3c] border-l-[3px] border-l-[#00d4aa] rounded-[10px] px-4 py-2.5 text-[14px] text-[#f0f0f5] leading-relaxed"
+                          className="rounded-xl border border-[#2a2a2a] bg-[#161616]/80 px-4 py-2.5 text-[13px] text-[#f0f0f5] leading-relaxed"
                         >
-                          <span className="text-[#00d4aa] font-bold mr-2">#{i + 1}</span>
+                          <span className="text-[#6c63ff] font-semibold mr-2">#{i + 1}</span>
                           {f.text}
                         </div>
                       ))}

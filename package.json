@@ -6,8 +6,16 @@
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
+    "prestart": "node scripts/check-dev-permissions.mjs",
+    "fix-permissions": "node scripts/fix-permissions.mjs",
+    "rustup-update": "node scripts/rustup-update.mjs",
+    "kill-sui": "node scripts/kill-sui-localnet.mjs",
+    "kill-ika": "node scripts/kill-ika-localnet.mjs",
+    "sync-walrus-skills": "node scripts/sync-walrus-skills.mjs",
     "start": "electron-forge start",
+    "prepackage": "node scripts/prebuild-check.mjs && electron-rebuild -f -w node-pty",
     "package": "electron-forge package",
+    "premake": "node scripts/prebuild-check.mjs && electron-rebuild -f -w node-pty",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx ."
@@ -49,20 +57,27 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@ika.xyz/sdk": "^0.4.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@monaco-editor/react": "^4.7.0",
     "@mysten-incubation/memwal": "^0.0.7",
     "@mysten/dapp-kit": "^1.0.6",
     "@mysten/sui": "^2.17.0",
+    "@mysten/walrus": "^1.2.5",
     "@t2000/sdk": "^4.4.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@tanstack/react-query": "^5.101.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^11.0.2",
     "lucide-react": "^1.21.0",
+    "node-pty": "^1.1.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-file-icon": "^1.6.0",
-    "react-router-dom": "^7.17.0"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.17.0",
+    "remark-gfm": "^4.0.1"
   }
 }

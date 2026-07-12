@@ -5,7 +5,12 @@ export default defineConfig({
     outDir: '.vite/build',
     emptyOutDir: false,
     rollupOptions: {
-      external: ['electron']
+      external: [
+        'electron',
+        'node-pty',
+        '@mysten/walrus',
+        '@mysten/walrus-wasm',
+      ],
     }
   }
 })

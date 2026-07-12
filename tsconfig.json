@@ -13,7 +13,9 @@
     "baseUrl": ".",                
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@ika.xyz/sdk": ["vendor/@ika.xyz/sdk/dist/esm"],
+      "@ika.xyz/ika-wasm": ["src/renderer/lib/ika-wasm-entry.ts"]
     }
   },
   "include": ["src"]

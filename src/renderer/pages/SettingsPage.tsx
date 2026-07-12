@@ -8,7 +8,10 @@ import type {
   WalrusNetworkConfig,
   AppSettings,
   WalrusNetwork,
+  AiSettings,
+  AiAuthMode,
 } from "../types/settings";
+import { AI_MODEL_OPTIONS } from "../../helper/ai-models";
 
 const SIDEBAR_ITEMS = CONFIG.settingsPage.SIDEBAR_ITEMS;
 
@@ -31,6 +34,14 @@ const DEFAULTS: AppSettings = {
   autoLaunch: false,
   startMinimized: false,
   mcpUrl: "http://0.0.0.0:47823",
+  ai: {
+    enabled: false,
+    authMode: "grok-build",
+    apiKey: "",
+    model: "grok-build-0.1",
+    includePageContext: true,
+    allowToolUse: true,
+  },
   walrus: {
     mainnet: {
       target: "https://relayer.memory.walrus.xyz",
@@ -48,6 +59,10 @@ const DEFAULTS: AppSettings = {
         "0xe80f2feec1c139616a86c9f71210152e2a7ca552b20841f2e192f99f75864437",
       rpc: "https://fullnode.testnet.sui.io:443",
     },
+  },
+  github: {
+    clientId: "",
+    clientSecret: "",
   },
 };
 
@@ -279,6 +294,345 @@ function ApplicationSection({
   );
 }
 
+// ── AiSection ────────────────────────────────────────────────────────────────
+
+function AiSection({
+  settings,
+  showToast,
+  onUpdate,
+}: {
+  settings: AppSettings;
+  showToast: (m: string, d?: boolean) => void;
+  onUpdate: (key: keyof AppSettings, value: unknown) => Promise<void>;
+}) {
+  const ai = settings.ai ?? DEFAULTS.ai;
+  const authMode: AiAuthMode = ai.authMode === "api-key" ? "api-key" : "grok-build";
+  const [apiKeyDraft, setApiKeyDraft] = useState(ai.apiKey);
+  const [oauthCodeDraft, setOauthCodeDraft] = useState("");
+  const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [grokStatus, setGrokStatus] = useState<{
+    connected: boolean;
+    email: string | null;
+    source: "beluga" | "grok-cli" | null;
+  } | null>(null);
+
+  useEffect(() => {
+    setApiKeyDraft(ai.apiKey);
+  }, [ai.apiKey]);
+
+  const refreshGrokStatus = useCallback(async () => {
+    if (!window.belugaAi?.oauthStatus) return;
+    const status = await window.belugaAi.oauthStatus();
+    setGrokStatus({
+      connected: status.connected,
+      email: status.email,
+      source: status.source,
+    });
+  }, []);
+
+  useEffect(() => {
+    void refreshGrokStatus();
+    const unsub = window.belugaAi?.onOauthComplete?.((payload) => {
+      setSigningIn(false);
+      setTestStatus(payload.ok ? `✓ ${payload.message}` : payload.message);
+      if (payload.ok) showToast(payload.message);
+      else showToast(payload.message, true);
+      void refreshGrokStatus();
+    });
+    return () => unsub?.();
+  }, [refreshGrokStatus, showToast]);
+
+  const patchAi = async (patch: Partial<AiSettings>) => {
+    await onUpdate("ai", { ...ai, ...patch });
+  };
+
+  const saveApiKey = async () => {
+    const trimmed = apiKeyDraft.trim();
+    if (!trimmed) {
+      showToast("Paste your xAI API key first", true);
+      return;
+    }
+    await patchAi({ apiKey: trimmed });
+    showToast("API key saved");
+  };
+
+  const testConnection = async () => {
+    setTesting(true);
+    setTestStatus("Testing…");
+    try {
+      if (!window.belugaAi?.testConnection) {
+        throw new Error("AI bridge unavailable. Restart the app.");
+      }
+      const result = await window.belugaAi.testConnection({
+        apiKey: authMode === "api-key" ? apiKeyDraft.trim() : undefined,
+        model: ai.model,
+        authMode,
+      });
+      if (result.ok && authMode === "api-key") {
+        const patch: Partial<AiSettings> = { apiKey: apiKeyDraft.trim() };
+        if (result.suggestedModel && result.suggestedModel !== ai.model) {
+          patch.model = result.suggestedModel;
+        }
+        await patchAi(patch);
+      }
+      setTestStatus(result.ok ? `✓ ${result.message}` : result.message);
+      if (!result.ok) showToast(result.message, true);
+      else showToast(result.message);
+      if (authMode === "grok-build") await refreshGrokStatus();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Test failed";
+      setTestStatus(msg);
+      showToast(msg, true);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const signInWithGrok = async () => {
+    setSigningIn(true);
+    setTestStatus("Opening browser…");
+    try {
+      if (!window.belugaAi?.oauthStart) {
+        throw new Error("AI bridge unavailable. Restart the app.");
+      }
+      const result = await window.belugaAi.oauthStart();
+      if (!result.ok) throw new Error(result.message ?? "Could not start sign-in.");
+      setTestStatus(result.message ?? "Complete sign-in in your browser.");
+      showToast(result.message ?? "Browser opened for Grok sign-in.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Sign-in failed";
+      setTestStatus(msg);
+      showToast(msg, true);
+      setSigningIn(false);
+    }
+  };
+
+  const submitOAuthCode = async () => {
+    const code = oauthCodeDraft.trim();
+    if (!code) {
+      showToast("Paste the Grok Build sign-in code", true);
+      return;
+    }
+    setSigningIn(true);
+    try {
+      if (!window.belugaAi?.oauthExchangeCode) {
+        throw new Error("AI bridge unavailable. Restart the app.");
+      }
+      const result = await window.belugaAi.oauthExchangeCode(code);
+      setTestStatus(result.ok ? `✓ ${result.message}` : result.message);
+      if (!result.ok) showToast(result.message, true);
+      else {
+        showToast(result.message);
+        setOauthCodeDraft("");
+      }
+      await refreshGrokStatus();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Code exchange failed";
+      setTestStatus(msg);
+      showToast(msg, true);
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const logoutGrok = async () => {
+    await window.belugaAi?.oauthLogout?.();
+    await refreshGrokStatus();
+    setTestStatus(null);
+    showToast("Signed out of Grok Build");
+  };
+
+  const canTest =
+    authMode === "grok-build" ? grokStatus?.connected : Boolean(apiKeyDraft.trim());
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeading
+        title="AI Assistant"
+        sub="Optional in-app chat powered by Grok Build (subscription) or xAI API key"
+      />
+      <Card>
+        <CardHeader>General</CardHeader>
+        <ToggleRow
+          label="Enable AI Assistant"
+          desc="Show the AI chat panel in the titlebar"
+          checked={ai.enabled}
+          onChange={(v) => patchAi({ enabled: v })}
+        />
+        <ToggleRow
+          label="Include page context"
+          desc="Tell the AI which Beluga page you are on"
+          checked={ai.includePageContext}
+          onChange={(v) => patchAi({ includePageContext: v })}
+        />
+        <ToggleRow
+          label="Allow Beluga tool use"
+          desc="Let the AI list projects, read/write files, and query Walrus memory"
+          checked={ai.allowToolUse ?? true}
+          onChange={(v) => patchAi({ allowToolUse: v })}
+        />
+      </Card>
+
+      <Card>
+        <CardHeader>Authentication</CardHeader>
+        <Field label="Sign-in method">
+          <select
+            value={authMode}
+            onChange={(e) => {
+              const mode = e.target.value as AiAuthMode;
+              const patch: Partial<AiSettings> = { authMode: mode };
+              if (mode === "grok-build" && !ai.model.startsWith("grok-build")) {
+                patch.model = "grok-build-0.1";
+              }
+              if (mode === "api-key" && ai.model.startsWith("grok-build")) {
+                patch.model = "grok-3-fast";
+              }
+              void patchAi(patch);
+            }}
+            className="border border-[#2a2a3c] text-[#f0f0f5] rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-[#6c63ff] transition-colors w-full"
+            style={{ background: "#111111" }}
+          >
+            <option value="grok-build">Grok Build (SuperGrok / X Premium+)</option>
+            <option value="api-key">xAI API key (prepaid credits)</option>
+          </select>
+        </Field>
+
+        {authMode === "grok-build" ? (
+          <>
+            <p className="text-[11px] text-[#8888a0] mb-4 leading-relaxed">
+              Uses the same browser login as the Grok Build CLI — no API key or
+              prepaid credits needed. Works with SuperGrok or X Premium+.
+              If you already ran <code className="text-[#ccc]">grok</code> in a
+              terminal, Beluga reuses that session automatically.
+            </p>
+            {grokStatus?.connected ? (
+              <div className="rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/08 px-3 py-2.5 mb-4">
+                <p className="text-[12px] text-[#00d4aa]">
+                  Signed in
+                  {grokStatus.email ? ` as ${grokStatus.email}` : ""}
+                  {grokStatus.source === "grok-cli" ? " (from Grok CLI)" : ""}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[12px] text-[#8888a0] mb-4">Not signed in yet.</p>
+            )}
+            <div className="flex items-center gap-3 flex-wrap mb-4">
+              <BtnPrimary
+                onClick={signInWithGrok}
+                disabled={signingIn}
+                className="text-[12px] px-3 py-2"
+              >
+                {signingIn ? "Waiting for browser…" : "Sign in with Grok"}
+              </BtnPrimary>
+              {grokStatus?.connected && (
+                <BtnSecondary
+                  onClick={logoutGrok}
+                  className="text-[12px] px-3 py-2"
+                >
+                  Sign out
+                </BtnSecondary>
+              )}
+            </div>
+            <Field label="Grok Build code (if browser shows a code)">
+              <Input
+                value={oauthCodeDraft}
+                onChange={(e) => setOauthCodeDraft(e.target.value)}
+                placeholder="Paste sign-in code from browser"
+                autoComplete="off"
+              />
+            </Field>
+            <div className="flex items-center gap-3 mt-2">
+              <BtnSecondary
+                onClick={submitOAuthCode}
+                disabled={signingIn || !oauthCodeDraft.trim()}
+                className="text-[12px] px-3 py-2"
+              >
+                Submit code
+              </BtnSecondary>
+            </div>
+          </>
+        ) : (
+          <>
+            <Field label="API key">
+              <Input
+                type="password"
+                value={apiKeyDraft}
+                onChange={(e) => setApiKeyDraft(e.target.value)}
+                placeholder="xai-…"
+                autoComplete="off"
+              />
+            </Field>
+            <div className="flex items-center gap-3 mt-2">
+              <BtnPrimary onClick={saveApiKey} className="text-[12px] px-3 py-2">
+                Save key
+              </BtnPrimary>
+            </div>
+            <p className="text-[11px] text-[#8888a0] mt-3 leading-relaxed">
+              API keys require prepaid credits at{" "}
+              <a
+                href="https://console.x.ai/team/default/billing"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#6c63ff] hover:underline"
+              >
+                console.x.ai → Billing
+              </a>
+              . Grok / X Premium alone does not include API credits.
+            </p>
+            {ai.apiKey && (
+              <p className="text-[11px] text-[#00d4aa] mt-2">
+                Saved key: {ai.apiKey.slice(0, 4)}••••{ai.apiKey.slice(-4)}
+              </p>
+            )}
+          </>
+        )}
+
+        <Field label="Model">
+          <select
+            value={ai.model}
+            onChange={(e) => patchAi({ model: e.target.value })}
+            className="border border-[#2a2a3c] text-[#f0f0f5] rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-[#6c63ff] transition-colors w-full"
+            style={{ background: "#111111" }}
+          >
+            <optgroup label="Grok Build (agentic)">
+              {AI_MODEL_OPTIONS.filter((m) => m.group === "build").map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Grok Chat">
+              {AI_MODEL_OPTIONS.filter((m) => m.group === "chat").map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </Field>
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <BtnSecondary
+            onClick={testConnection}
+            disabled={testing || !canTest}
+            className="text-[12px] px-3 py-2"
+          >
+            Test connection
+          </BtnSecondary>
+          {testStatus && (
+            <span
+              className={`text-[12px] ${testStatus.startsWith("✓") ? "text-[#00d4aa]" : "text-[#8888a0]"}`}
+            >
+              {testStatus}
+            </span>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ── McpSection ───────────────────────────────────────────────────────────────
 
 function McpSection({
@@ -373,6 +727,24 @@ function McpSection({
             </span>
           )}
         </div>
+      </Card>
+      <Card>
+        <CardHeader>Scoped MCP endpoints</CardHeader>
+        <p className="text-[12px] text-[#8888a0] mb-3 leading-relaxed">
+          Same port, different tool sets. Use a scoped URL in Cursor/Claude when you
+          only need one area (Playground includes core project tools).
+        </p>
+        <ul className="text-[11px] font-mono text-[#c7c7d8] space-y-1.5">
+          <li>/mcp — all tools</li>
+          <li>/mcp/core — projects, memory, files, skills</li>
+          <li>/mcp/playground — localnet, Move build/publish, dWallet</li>
+          <li>/mcp/packages — SDK catalog install/link</li>
+          <li>/mcp/tools — token scanner, NFT/token gen, gRPC</li>
+          <li>/mcp/wallet — wallet balance, faucet, send</li>
+        </ul>
+        <p className="text-[11px] text-[#666680] mt-3">
+          Example: <code className="text-[#aaa]">http://0.0.0.0:47823/mcp/playground</code>
+        </p>
       </Card>
     </div>
   );
@@ -552,6 +924,160 @@ function WalrusSection({
   );
 }
 
+const GITHUB_TOKEN_URL =
+  "https://github.com/settings/tokens/new?scopes=repo,read:user&description=Beluga";
+
+// ── GitHubSection ─────────────────────────────────────────────────────────────
+
+function GitHubSection({
+  showToast,
+}: {
+  settings: AppSettings;
+  showToast: (m: string, d?: boolean) => void;
+  onUpdate: (key: keyof AppSettings, value: unknown) => Promise<void>;
+}) {
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [ghStatus, setGhStatus] = useState<{
+    connected: boolean;
+    login: string | null;
+    gitInstalled: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!window.belugaGitHub?.getStatus) return;
+    const s = await window.belugaGitHub.getStatus();
+    setGhStatus({
+      connected: s.connected,
+      login: s.login,
+      gitInstalled: s.gitInstalled,
+    });
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const connect = async () => {
+    const api = window.belugaGitHub;
+    if (!api?.savePat || !api.verify) {
+      showToast("GitHub bridge unavailable. Restart the app.", true);
+      return;
+    }
+    const token = tokenDraft.trim();
+    if (!token) {
+      showToast("Paste your GitHub token first", true);
+      return;
+    }
+    setBusy(true);
+    setStatus("Connecting…");
+    try {
+      const saved = await api.savePat(token);
+      if (!saved.ok) throw new Error(saved.message);
+      const verified = await api.verify();
+      if (!verified.ok) throw new Error(verified.message);
+      setStatus(`Connected as ${verified.login ?? "GitHub user"}`);
+      showToast(`Connected as ${verified.login ?? "GitHub user"}`);
+      setTokenDraft("");
+      await refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Connection failed";
+      setStatus(msg);
+      showToast(msg, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    await window.belugaGitHub?.logout?.();
+    setStatus(null);
+    setTokenDraft("");
+    showToast("Disconnected from GitHub");
+    await refresh();
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeading
+        title="GitHub"
+        sub="Paste a personal access token — then push, create repos, and use git from projects or the AI"
+      />
+      <Card>
+        <CardHeader>Account</CardHeader>
+
+        {ghStatus?.connected ? (
+          <div className="flex items-center justify-between gap-3 mb-4 p-3 rounded-xl bg-[#00d4aa]/08 border border-[#00d4aa]/20">
+            <div>
+              <p className="text-[13px] text-[#00d4aa] font-medium">
+                Connected as @{ghStatus.login}
+              </p>
+              <p className="text-[11px] text-[#8888a0] mt-0.5">
+                Token stored locally on this device
+              </p>
+            </div>
+            <BtnSecondary onClick={() => void logout()}>Disconnect</BtnSecondary>
+          </div>
+        ) : (
+          <p className="text-[13px] text-[#8888a0] mb-4">
+            Not connected yet. Create a token on GitHub, paste it below, and
+            click Connect.
+          </p>
+        )}
+
+        {!ghStatus?.gitInstalled && (
+          <p className="text-[12px] text-[#ffb347] mb-4">
+            Git is not installed — install it from Packages → Toolchain before
+            push/pull.
+          </p>
+        )}
+
+        <ol className="text-[12px] text-[#8888a0] mb-4 space-y-1.5 list-decimal list-inside leading-relaxed">
+          <li>
+            <a
+              href={GITHUB_TOKEN_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#4ca3ff] hover:underline"
+            >
+              Create a token on GitHub
+            </a>{" "}
+            with <code className="text-[#aaa]">repo</code> scope
+          </li>
+          <li>Copy the token (starts with <code className="text-[#aaa]">ghp_</code> or{" "}
+            <code className="text-[#aaa]">github_pat_</code>)
+          </li>
+          <li>Paste it here and press Connect</li>
+        </ol>
+
+        <Field label="Personal access token">
+          <Input
+            type="password"
+            value={tokenDraft}
+            onChange={(e) => setTokenDraft(e.target.value)}
+            placeholder="ghp_… or github_pat_…"
+            autoComplete="off"
+          />
+        </Field>
+
+        {status && (
+          <p className="text-[12px] text-[#8888a0] mb-3">{status}</p>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <BtnPrimary
+            onClick={() => void connect()}
+            disabled={busy || !tokenDraft.trim()}
+          >
+            {busy ? "Connecting…" : ghStatus?.connected ? "Update token" : "Connect"}
+          </BtnPrimary>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -574,7 +1100,22 @@ export function SettingsPage() {
     }
     (window as any).settings
       .get()
-      .then((s: AppSettings) => setSettings(s))
+      .then((s: AppSettings) =>
+        setSettings({
+          ...DEFAULTS,
+          ...s,
+          ai: {
+            ...DEFAULTS.ai,
+            ...(s.ai ?? {}),
+            allowToolUse: s.ai?.allowToolUse ?? DEFAULTS.ai.allowToolUse,
+          },
+          walrus: {
+            mainnet: { ...DEFAULTS.walrus.mainnet, ...s.walrus?.mainnet },
+            testnet: { ...DEFAULTS.walrus.testnet, ...s.walrus?.testnet },
+          },
+          github: { ...DEFAULTS.github, ...s.github },
+        }),
+      )
       .catch((err: unknown) => console.error("[Settings] get() failed:", err))
       .finally(() => setLoading(false));
   }, []);
@@ -643,8 +1184,10 @@ export function SettingsPage() {
           {activeSection === "application" && (
             <ApplicationSection {...sectionProps} />
           )}
+          {activeSection === "ai" && <AiSection {...sectionProps} />}
           {activeSection === "mcp" && <McpSection {...sectionProps} />}
           {activeSection === "walrus" && <WalrusSection {...sectionProps} />}
+          {activeSection === "github" && <GitHubSection {...sectionProps} />}
         </main>
       </div>
 

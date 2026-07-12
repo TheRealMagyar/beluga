@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useWallet } from "./Walletcontext";
+import { NetworkSwitcher } from "./NetworkSwitcher";
+import { SUI_NETWORKS } from "../types/network";
 import type { Transaction, WalletInfo } from "../types/wallet";
 import {
   Gem,
@@ -109,8 +111,17 @@ function QRCode({ value, size = 140 }: { value: string; size?: number }) {
 // ─── Sub-views ────────────────────────────────────────────────────────────────
 
 function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
-  const { balance, transactions, refreshing, lastUpdated, refresh } =
-    useWallet();
+  const {
+    balance,
+    transactions,
+    refreshing,
+    lastUpdated,
+    refresh,
+    network,
+    walletInfo,
+  } = useWallet();
+  const [faucetLoading, setFaucetLoading] = useState(false);
+  const [faucetMessage, setFaucetMessage] = useState<string | null>(null);
   const raw = balance as any;
 
   const usdc =
@@ -128,8 +139,87 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
     { val: total, label: "Total" },
   ];
 
+  const networkLabel = SUI_NETWORKS[network].label;
+  const networkConfig = SUI_NETWORKS[network];
+
+  async function handleRequestFaucet() {
+    if (
+      !walletInfo?.address ||
+      !networkConfig.faucet ||
+      network === "mainnet"
+    ) {
+      return;
+    }
+    setFaucetLoading(true);
+    setFaucetMessage(null);
+    const result = await window.sui.requestFaucet({
+      network,
+      recipient: walletInfo.address,
+    });
+    setFaucetLoading(false);
+    if (result.success) {
+      setFaucetMessage(
+        `Received ${result.amountSui?.toFixed(2) ?? "some"} SUI from the faucet.`,
+      );
+      refresh();
+    } else {
+      setFaucetMessage(result.error || "Faucet request failed.");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
+      {network !== "mainnet" && (
+        <div
+          className="flex items-start gap-2 px-2.5 py-2 rounded-xl text-[11px] border"
+          style={{
+            color: networkConfig.accent,
+            borderColor: `${networkConfig.accent}33`,
+            background: `${networkConfig.accent}14`,
+          }}
+        >
+          <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            You are on {networkLabel}. Send and swap are only available on
+            Mainnet.
+            {networkConfig.faucet
+              ? " Request test SUI below or from the Playground faucet."
+              : ""}
+          </span>
+        </div>
+      )}
+
+      {networkConfig.faucet && (
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={handleRequestFaucet}
+            disabled={faucetLoading || !walletInfo?.address}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border font-semibold text-xs cursor-pointer disabled:opacity-60 transition-colors"
+            style={{
+              color: networkConfig.accent,
+              borderColor: `${networkConfig.accent}40`,
+              background: `${networkConfig.accent}14`,
+            }}
+          >
+            {faucetLoading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Requesting...
+              </>
+            ) : (
+              <>
+                <CircleDollarSign className="w-3.5 h-3.5" /> Request SUI (
+                {networkLabel})
+              </>
+            )}
+          </button>
+          {faucetMessage && (
+            <div className="px-2.5 py-2 bg-white/[0.04] border border-white/[0.06] rounded-lg text-[10px] text-neutral-400">
+              {faucetMessage}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Balance */}
       <div className="relative bg-[#0f0f1a] rounded-xl p-3 border border-white/[0.06]">
         <button
@@ -249,7 +339,7 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
 }
 
 function Send({ onDone }: { onDone: () => void }) {
-  const { balance, refresh } = useWallet();
+  const { balance, refresh, network } = useWallet();
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const [asset, setAsset] = useState("USDC");
@@ -271,6 +361,25 @@ function Send({ onDone }: { onDone: () => void }) {
   }
 
   const available = getAvailable(asset);
+
+  if (network !== "mainnet") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <AlertTriangle className="w-8 h-8 text-[#ffb347]" />
+        <p className="text-sm text-neutral-300 font-medium">Mainnet only</p>
+        <p className="text-[11px] text-neutral-500 leading-relaxed px-2">
+          Sending assets is only supported on Mainnet. Switch network in the
+          wallet header or request test SUI from the faucet.
+        </p>
+        <button
+          onClick={onDone}
+          className="mt-1 px-4 py-2 rounded-xl border border-white/[0.08] text-xs text-neutral-300 cursor-pointer bg-transparent hover:bg-white/5"
+        >
+          Back to wallet
+        </button>
+      </div>
+    );
+  }
 
   async function resolveRecipient(val: string) {
     setResolved(null);
@@ -434,7 +543,7 @@ function Send({ onDone }: { onDone: () => void }) {
 }
 
 function Receive() {
-  const { walletInfo } = useWallet();
+  const { walletInfo, network } = useWallet();
   const [copied, setCopied] = useState(false);
   const address = walletInfo?.address ?? "";
 
@@ -468,14 +577,16 @@ function Receive() {
       </button>
       <div className="flex items-center justify-center gap-1.5 text-[11px] text-neutral-600 text-center leading-relaxed">
         <Info className="w-3 h-3 flex-shrink-0" />
-        Only send Sui Mainnet tokens to this address.
+        {network === "mainnet"
+          ? "Only send Sui Mainnet tokens to this address."
+          : `This address is active on ${SUI_NETWORKS[network].label}.`}
       </div>
     </div>
   );
 }
 
 function Swap({ onDone }: { onDone: () => void }) {
-  const { refresh } = useWallet();
+  const { refresh, network } = useWallet();
   const [from, setFrom] = useState("USDC");
   const [to, setTo] = useState("SUI");
   const [amount, setAmount] = useState("");
@@ -487,6 +598,25 @@ function Swap({ onDone }: { onDone: () => void }) {
 
   const fromAssets = SWAP_ASSETS.filter((a) => a !== to);
   const toAssets = SWAP_ASSETS.filter((a) => a !== from);
+
+  if (network !== "mainnet") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <AlertTriangle className="w-8 h-8 text-[#ffb347]" />
+        <p className="text-sm text-neutral-300 font-medium">Mainnet only</p>
+        <p className="text-[11px] text-neutral-500 leading-relaxed px-2">
+          Swapping is only supported on Mainnet. Switch network in the wallet
+          header to use Send and Swap features.
+        </p>
+        <button
+          onClick={onDone}
+          className="mt-1 px-4 py-2 rounded-xl border border-white/[0.08] text-xs text-neutral-300 cursor-pointer bg-transparent hover:bg-white/5"
+        >
+          Back to wallet
+        </button>
+      </div>
+    );
+  }
 
   async function fetchQuote() {
     if (!amount || parseFloat(amount) <= 0)
@@ -662,7 +792,7 @@ function Swap({ onDone }: { onDone: () => void }) {
 }
 
 function Settings() {
-  const { walletInfo, logout } = useWallet();
+  const { walletInfo, logout, network } = useWallet();
   const [modal, setModal] = useState<null | "export" | "delete">(null);
   const [privateKey, setPrivateKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -686,9 +816,17 @@ function Settings() {
   return (
     <div className="flex flex-col gap-3">
       <div className="bg-[#14141f] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-2">
+        <div className="flex justify-between items-center gap-2">
+          <span className="text-[11px] text-neutral-500 flex-shrink-0">
+            Network
+          </span>
+          <NetworkSwitcher />
+        </div>
+        <div className="h-px bg-white/[0.06]" />
         {[
           { label: "Address", val: walletInfo?.address },
           { label: "Public key", val: walletInfo?.publicKey },
+          { label: "Active network", val: SUI_NETWORKS[network].label },
         ]
           .filter((r) => r.val)
           .map((r) => (
@@ -961,20 +1099,16 @@ export default function WalletExtension({ onClose }: WalletExtensionProps) {
 
   return (
     <div
-      className="absolute bottom-12 left-full ml-2 w-72 bg-[#0f0f1a] border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 flex flex-col overflow-hidden ring-1 ring-white/[0.03]"
+      data-wallet-extension
+      className="w-72 bg-[#0f0f1a] border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden ring-1 ring-white/[0.03]"
       style={{ maxHeight: "520px" }}
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
         <span className="text-sm font-semibold text-neutral-100 flex-1">
-          Sui Wallet
+          Beluga Wallet
         </span>
-        {walletInfo && (
-          <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/25 text-green-400 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Mainnet
-          </span>
-        )}
+        {walletInfo && <NetworkSwitcher compact placement="top" />}
         <button
           onClick={onClose}
           className="bg-transparent border-none text-neutral-600 hover:text-neutral-300 cursor-pointer ml-1 transition-colors"
