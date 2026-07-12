@@ -27,6 +27,7 @@ import {
   updateIkaRepository,
   updateIkaSdk,
 } from "../helper/ika-toolchain";
+import { ikaWasmIsInstalled } from "../helper/ika-vendor-path";
 import { cancelJob, listActiveJobs } from "../helper/packages-job-manager";
 import { installGit, updateGit } from "../helper/git-toolchain";
 import {
@@ -103,6 +104,7 @@ export function registerPackagesIpc(ctx: MainIpcContext) {
     updateIkaSdk(ctx.broadcastToolchainProgress),
   );
   ipcMain.handle("packages:uninstall-ika-sdk", async () => uninstallIkaSdk());
+  ipcMain.handle("packages:has-ika-wasm", async () => ikaWasmIsInstalled());
 
   ipcMain.handle("packages:list-catalog", async () => listCatalog());
   ipcMain.handle("packages:list-custom", async () => listCustomPackages());

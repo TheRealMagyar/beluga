@@ -14,6 +14,7 @@ export interface ElectronAPI {
   windowClose: () => Promise<void>;
   windowIsMaximized: () => Promise<boolean>;
   platform: string;
+  isPackaged: boolean;
 }
 
 export interface AppSettings {
@@ -68,6 +69,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowClose: () => ipcRenderer.invoke('window-close'),
   windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
   platform: process.platform,
+  // Sandboxed preload cannot use electron.app — defaultApp is false in .app bundles.
+  isPackaged: !process.defaultApp,
 } satisfies ElectronAPI);
 
 contextBridge.exposeInMainWorld('sui', {
@@ -410,6 +413,7 @@ contextBridge.exposeInMainWorld('packages', {
   installIkaSdk: () => ipcRenderer.invoke('packages:install-ika-sdk'),
   updateIkaSdk: () => ipcRenderer.invoke('packages:update-ika-sdk'),
   uninstallIkaSdk: () => ipcRenderer.invoke('packages:uninstall-ika-sdk'),
+  hasIkaWasm: () => ipcRenderer.invoke('packages:has-ika-wasm') as Promise<boolean>,
   listCatalog: () => ipcRenderer.invoke('packages:list-catalog'),
   listCustomPackages: () => ipcRenderer.invoke('packages:list-custom'),
   createCustomPackage: (input: {

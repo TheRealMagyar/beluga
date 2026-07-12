@@ -1,4 +1,10 @@
 import { app, BrowserWindow } from "electron";
+import {
+  installBelugaVendorProtocol,
+  registerBelugaVendorScheme,
+} from "./helper/ika-vendor-protocol";
+
+registerBelugaVendorScheme();
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import {
@@ -58,6 +64,8 @@ if (process.defaultApp) {
 
 app.whenReady().then(async () => {
   console.log("[MAIN] ✅ app.whenReady() kész!");
+
+  installBelugaVendorProtocol();
 
   if (process.getuid?.() === 0) {
     console.warn(

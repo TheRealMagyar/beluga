@@ -31,6 +31,8 @@ export function defaultValueForParam(param: MoveEntryParam): string {
       return "false";
     case "address":
       return "0x0";
+    case "string":
+      return param.name === "skin" ? "classic" : "Serpent";
     case "coin":
       return DEFAULT_VALUES.ticket_price ?? "1000000000";
     case "object":
@@ -83,6 +85,8 @@ export function paramInputLabel(param: MoveEntryParam): string {
       return `${param.name} — bool`;
     case "address":
       return `${param.name} — address`;
+    case "string":
+      return `${param.name} — text (UTF-8)`;
     default:
       return `${param.name} — ${param.typeText}`;
   }

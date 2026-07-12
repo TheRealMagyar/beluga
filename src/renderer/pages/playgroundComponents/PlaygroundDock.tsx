@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Hammer,
   Droplets,
@@ -33,6 +33,7 @@ import {
 } from "./PackageArtifactsPanel";
 import { PlaygroundWalletSwitcher } from "./PlaygroundWalletSwitcher";
 import { getPackageNameFromFiles, listBuiltModuleNames } from "./package-artifacts";
+import { countMovePublicFunctions } from "./project-loader";
 import type { PlaygroundFile } from "./types";
 
 const DOCK_WIDTH_KEY = "beluga-playground-dock-width-v1";
@@ -188,6 +189,14 @@ export function PlaygroundDock({
       return next;
     });
   }, []);
+
+  const publicFunCount = useMemo(
+    () =>
+      countMovePublicFunctions(
+        files.filter((f) => f.path.endsWith(".move")).map((f) => f.content),
+      ),
+    [files],
+  );
 
   const panelMeta = (() => {
     switch (panel) {
@@ -370,10 +379,21 @@ export function PlaygroundDock({
                     </p>
                   )}
                   {moveEntries.length === 0 ? (
-                    <p className="text-[11px] text-[#8888a0]">
-                      No entry functions detected. Load a Move project or use
-                      the default template.
-                    </p>
+                    <div className="space-y-2 text-[11px] text-[#8888a0] leading-relaxed">
+                      <p>
+                        No <span className="font-mono text-[#a8a8c0]">entry fun</span>{" "}
+                        found in the loaded Move source.
+                      </p>
+                      {publicFunCount > 0 ? (
+                        <p className="text-[#ffb347]">
+                          This package has {publicFunCount}{" "}
+                          <span className="font-mono">public fun</span> only — add{" "}
+                          <span className="font-mono">entry fun</span> wrappers (or
+                          mark functions as entry) so Beluga can call them from
+                          Test.
+                        </p>
+                      ) : null}
+                    </div>
                   ) : (
                     moveEntries.map((entry) => (
                       <EntryTestCard

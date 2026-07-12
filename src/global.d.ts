@@ -32,6 +32,7 @@ interface Window {
     windowClose: () => Promise<void>;
     windowIsMaximized: () => Promise<boolean>;
     platform: string;
+    isPackaged: boolean;
 
     // ── T2000 signing ──
     signTransaction: (transactionBytesB64: string) => Promise<{ success: true; bytes: string; signature: string } | { success: false; error: string }>;
@@ -391,6 +392,7 @@ interface Window {
       stdout: string;
       stderr: string;
     }>;
+    hasIkaWasm: () => Promise<boolean>;
     listCatalog: () => Promise<Array<{
       id: string;
       name: string;

@@ -22,6 +22,10 @@ import {
   getIkaLocalnetConfig,
   migrateIkaToolchainIfNeeded,
 } from "./ika-localnet";
+import {
+  getIkaVendorRoot,
+  getIkaWasmWebDir,
+} from "./ika-vendor-path";
 
 const execFileAsync = promisify(execFile);
 
@@ -110,6 +114,7 @@ async function probeIkaBinary(): Promise<ToolchainComponentStatus> {
 async function probeIkaSdk(): Promise<ToolchainComponentStatus> {
   const appRoot = app.getAppPath();
   const candidates = [
+    path.join(getIkaVendorRoot(), "sdk", "package.json"),
     path.join(process.cwd(), "vendor", "@ika.xyz", "sdk", "package.json"),
     path.join(app.getAppPath(), "vendor", "@ika.xyz", "sdk", "package.json"),
     path.join(appRoot, "node_modules", "@ika.xyz", "sdk", "package.json"),
@@ -446,7 +451,7 @@ function getIkaWasmCargoTargetDir() {
 }
 
 function vendorIkaWasmWebDir() {
-  return path.join(process.cwd(), "vendor", "@ika.xyz", "ika-wasm", "dist", "web");
+  return getIkaWasmWebDir();
 }
 
 async function ensureWritableToolchainDirs() {
@@ -597,7 +602,7 @@ async function extractVendorPackage(
 export async function installIkaSdk(
   emit?: ToolchainProgressEmitter,
 ): Promise<InstallResult> {
-  const vendorRoot = path.join(process.cwd(), "vendor", "@ika.xyz");
+  const vendorRoot = getIkaVendorRoot();
   const sdkDir = path.join(vendorRoot, "sdk");
   const wasmDir = path.join(vendorRoot, "ika-wasm");
 
@@ -605,11 +610,12 @@ export async function installIkaSdk(
     job: "ika-sdk",
     phase: "starting",
     percent: 0,
-    message: "Installing Ika SDK into vendor/...",
+    message: `Installing Ika SDK into ${vendorRoot}...`,
     recentLogs: [],
   });
 
   try {
+    await fs.mkdir(vendorRoot, { recursive: true });
     await extractVendorPackage("@ika.xyz/sdk", "0.4.1", sdkDir, emit);
 
     const wasmBuild = await buildIkaWasmFromToolchain(emit);
@@ -658,7 +664,7 @@ export async function updateIkaSdk(
 }
 
 export async function uninstallIkaSdk(): Promise<InstallResult> {
-  const vendorRoot = path.join(process.cwd(), "vendor", "@ika.xyz");
+  const vendorRoot = getIkaVendorRoot();
   try {
     await fs.rm(vendorRoot, { recursive: true, force: true });
     return {

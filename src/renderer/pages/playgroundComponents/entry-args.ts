@@ -51,6 +51,16 @@ export function buildEntryArgs(
         args.push(tx.pure.address(raw?.trim() || defaultValueForParam(param)));
         break;
       }
+      case "string": {
+        const text = raw?.trim() ?? defaultValueForParam(param);
+        args.push(
+          tx.pure.vector(
+            "u8",
+            Array.from(new TextEncoder().encode(text)),
+          ),
+        );
+        break;
+      }
       case "coin": {
         const amount = raw?.trim() || defaultValueForParam(param);
         const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amount)]);

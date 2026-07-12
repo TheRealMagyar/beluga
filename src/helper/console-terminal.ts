@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { toolchainEnv } from "./sui-toolchain";
@@ -90,46 +91,38 @@ function resolveShell(): string {
 
 function buildTerminalEnv(shell: string): Record<string, string> {
   const toolchain = toolchainEnv();
-  const env: Record<string, string> = {
+  const home = toolchain.HOME || os.homedir();
+  const user =
+    toolchain.USER ||
+    toolchain.LOGNAME ||
+    toolchain.USERNAME ||
+    os.userInfo().username;
+  const pathEnv =
+    toolchain.PATH ||
+    process.env.PATH ||
+    process.env.Path ||
+    (process.platform === "win32"
+      ? "C:\\Windows\\system32;C:\\Windows"
+      : "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
+  const tmpDir = toolchain.TMPDIR || toolchain.TEMP || os.tmpdir();
+
+  // GUI-launched .app bundles often lack HOME/PATH — node-pty crashes without them.
+  return {
+    ...toolchain,
+    HOME: home,
+    USER: user,
+    LOGNAME: user,
+    USERNAME: toolchain.USERNAME || user,
+    PATH: pathEnv,
+    TMPDIR: tmpDir,
+    TEMP: tmpDir,
+    TMP: tmpDir,
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
     BELUGA_CONSOLE: "1",
     ZSH_DISABLE_COMPFIX: "true",
     SHELL: shell,
   };
-
-  const passthrough = [
-    "PATH",
-    "HOME",
-    "USER",
-    "USERNAME",
-    "USERPROFILE",
-    "APPDATA",
-    "LOCALAPPDATA",
-    "LOGNAME",
-    "TMPDIR",
-    "TEMP",
-    "TMP",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "CARGO_HOME",
-    "RUSTUP_HOME",
-    "XDG_CACHE_HOME",
-    "MOVE_HOME",
-    "XDG_RUNTIME_DIR",
-    "SystemRoot",
-    "ComSpec",
-  ] as const;
-
-  for (const key of passthrough) {
-    const value = toolchain[key];
-    if (typeof value === "string" && value.length > 0) {
-      env[key] = value;
-    }
-  }
-
-  return env;
 }
 
 async function ensureWorkspaceDir(cwd: string): Promise<string> {
@@ -161,12 +154,17 @@ export async function createTerminalSession(
     const cols = Math.max(size?.cols ?? 120, 20);
     const rows = Math.max(size?.rows ?? 32, 5);
 
+    const env = buildTerminalEnv(shell);
+    if (!env.HOME?.trim()) {
+      throw new Error("Terminal cannot start: HOME is not set.");
+    }
+
     const proc = pty.spawn(shell, shellArgs(shell), {
       name: "xterm-256color",
       cols,
       rows,
       cwd: workspace,
-      env: buildTerminalEnv(shell),
+      env,
     });
 
     const info: TerminalSessionInfo = {

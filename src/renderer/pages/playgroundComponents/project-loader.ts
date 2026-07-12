@@ -1,5 +1,6 @@
 import { readBelugaConfig } from "../projectManagerComponents/utils/beluga";
 import { isTestableInPlayground } from "../../../helper/beluga-project";
+import { getProjectScaffold } from "../../../helper/project-templates";
 import { loadProjects } from "../projectManagerComponents/utils/fs";
 import type { PlaygroundFile } from "./types";
 
@@ -12,6 +13,7 @@ export type MoveParamKind =
   | "bool"
   | "address"
   | "coin"
+  | "string"
   | "unknown";
 
 export interface MoveEntryParam {
@@ -83,6 +85,7 @@ function classifyMoveType(typeText: string): MoveParamKind {
   if (type === "u8") return "u8";
   if (type === "bool") return "bool";
   if (type === "address") return "address";
+  if (/\bString\b/.test(type) || /vector\s*<\s*u8\s*>/.test(type)) return "string";
   if (/^&(?:mut\s+)?/.test(type)) return "object";
   if (/^[A-Z]\w*/.test(type)) return "object";
   return "unknown";
@@ -97,6 +100,86 @@ function parseMoveParam(raw: string): MoveEntryParam | null {
     typeText: typeText.trim(),
     kind: classifyMoveType(typeText.trim()),
   };
+}
+
+async function pathIsFile(filePath: string): Promise<boolean> {
+  const fs = getFs();
+  try {
+    const stat = await fs.stat(filePath);
+    return !stat.isDirectory;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve the directory that contains Move.toml (project root or one subfolder deep). */
+export async function findMovePackageRoot(
+  projectPath: string,
+): Promise<string | null> {
+  const fs = getFs();
+  const candidates = [projectPath];
+
+  try {
+    const entries = await fs.readdir(projectPath);
+    for (const entry of entries) {
+      const subPath = await fs.pathJoin(projectPath, entry);
+      try {
+        const stat = await fs.stat(subPath);
+        if (stat.isDirectory) candidates.push(subPath);
+      } catch {
+        // skip unreadable entries
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  for (const root of candidates) {
+    const moveTomlPath = await fs.pathJoin(root, "Move.toml");
+    if (await pathIsFile(moveTomlPath)) return root;
+  }
+
+  return null;
+}
+
+function scaffoldMoveFiles(packageName: string) {
+  return getProjectScaffold("move", packageName).filter(
+    (file) => file.path === "Move.toml" || file.path.startsWith("sources/"),
+  );
+}
+
+async function repairMoveScaffold(
+  projectPath: string,
+  projectName: string,
+): Promise<Array<{ path: string; content: string }> | null> {
+  const config = await readBelugaConfig(projectPath, projectName);
+  if (!config || !isTestableInPlayground(config.template)) return null;
+
+  const packageName = config.name || projectName;
+  return scaffoldMoveFiles(packageName).map((file) => ({
+    path: file.path,
+    content:
+      typeof file.content === "function" ? file.content(packageName) : file.content,
+  }));
+}
+
+async function persistRepairedFiles(
+  packageRoot: string,
+  files: Array<{ path: string; content: string }>,
+) {
+  const fs = getFs();
+  for (const file of files) {
+    const target = await fs.pathJoin(packageRoot, file.path);
+    const existing = await fs.readFile(target);
+    if (existing !== null && existing.trim().length > 0) continue;
+
+    const parts = file.path.split("/");
+    if (parts.length > 1) {
+      const parent = await fs.pathJoin(packageRoot, ...parts.slice(0, -1));
+      await fs.mkdir(parent);
+    }
+    await fs.writeFile(target, file.content);
+  }
 }
 
 export async function listTestableProjects(): Promise<TestableProject[]> {
@@ -114,10 +197,7 @@ export async function listTestableProjects(): Promise<TestableProject[]> {
       continue;
     }
 
-    const fs = getFs();
-    const moveTomlPath = await fs.pathJoin(project.path, "Move.toml");
-    const moveToml = await fs.readFile(moveTomlPath);
-    if (moveToml) {
+    if (await findMovePackageRoot(project.path)) {
       testable.push({
         name: project.name,
         path: project.path,
@@ -195,6 +275,23 @@ export function parseMoveEntryFunctions(
   return entries;
 }
 
+/** Count callable `public fun` that are not `entry fun` (for Playground hints). */
+export function countMovePublicFunctions(moveSources: string[]): number {
+  let count = 0;
+  const publicHeader = /public\s+fun\s+(\w+)\s*\(/g;
+  const entryHeader = /(?:public\s+)?entry\s+fun\s+/g;
+
+  for (const source of moveSources) {
+    const withoutEntries = source.replace(entryHeader, "/*entry*/ fun ");
+    let match: RegExpExecArray | null;
+    while ((match = publicHeader.exec(withoutEntries)) !== null) {
+      count++;
+    }
+  }
+
+  return count;
+}
+
 export async function loadProjectIntoPlayground(
   projectPath: string,
 ): Promise<{
@@ -203,15 +300,35 @@ export async function loadProjectIntoPlayground(
   entries: MoveEntryFunction[];
 }> {
   const fs = getFs();
+  const projectName = projectPath.split(/[/\\]/).pop() ?? "project";
+  const packageRoot = (await findMovePackageRoot(projectPath)) ?? projectPath;
   const rawFiles: Array<{ path: string; content: string }> = [];
 
-  const moveTomlPath = await fs.pathJoin(projectPath, "Move.toml");
-  const moveToml = await fs.readFile(moveTomlPath);
-  if (moveToml) {
-    rawFiles.push({ path: "Move.toml", content: moveToml });
+  const moveTomlPath = await fs.pathJoin(packageRoot, "Move.toml");
+  const moveTomlExists = await pathIsFile(moveTomlPath);
+  let moveToml = moveTomlExists ? await fs.readFile(moveTomlPath) : null;
+
+  if (moveTomlExists) {
+    if (moveToml === null) moveToml = "";
+    if (!moveToml.trim()) {
+      const repaired = await repairMoveScaffold(projectPath, projectName);
+      const replacement = repaired?.find((f) => f.path === "Move.toml");
+      if (replacement) {
+        moveToml = replacement.content;
+        await persistRepairedFiles(packageRoot, [replacement]);
+      }
+    }
+    rawFiles.push({ path: "Move.toml", content: moveToml ?? "" });
+  } else {
+    const repaired = await repairMoveScaffold(projectPath, projectName);
+    const replacement = repaired?.find((f) => f.path === "Move.toml");
+    if (replacement) {
+      rawFiles.push(replacement);
+      await persistRepairedFiles(packageRoot, [replacement]);
+    }
   }
 
-  const sourcesPath = await fs.pathJoin(projectPath, "sources");
+  const sourcesPath = await fs.pathJoin(packageRoot, "sources");
   try {
     const sourcesStat = await fs.stat(sourcesPath);
     if (sourcesStat.isDirectory) {
@@ -219,6 +336,19 @@ export async function loadProjectIntoPlayground(
     }
   } catch {
     // sources folder may be missing
+  }
+
+  const moveSourcesEmpty =
+    !rawFiles.some((f) => f.path.endsWith(".move") && f.content.trim().length > 0);
+  if (moveSourcesEmpty) {
+    const repaired = await repairMoveScaffold(projectPath, projectName);
+    if (repaired) {
+      const sourceFiles = repaired.filter((f) => f.path.startsWith("sources/"));
+      if (sourceFiles.length) {
+        rawFiles.push(...sourceFiles);
+        await persistRepairedFiles(packageRoot, sourceFiles);
+      }
+    }
   }
 
   if (!rawFiles.length) {

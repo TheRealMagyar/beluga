@@ -88,9 +88,11 @@ function ParamField({
         placeholder={
           param.kind === "address"
             ? "0x…"
-            : param.kind === "coin" || param.kind === "u64"
-              ? "1000000000"
-              : "0"
+            : param.kind === "string"
+              ? "text value"
+              : param.kind === "coin" || param.kind === "u64"
+                ? "1000000000"
+                : "0"
         }
         className="w-full h-9 px-3 rounded-lg text-[12px] font-mono bg-[#1e1e1e] border border-[#2a2a3c] text-[#f0f0f5] outline-none placeholder:text-[#55556a]"
       />
