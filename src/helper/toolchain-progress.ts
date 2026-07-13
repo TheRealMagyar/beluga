@@ -106,7 +106,9 @@ export function parseCargoProgressLine(line: string): Partial<ToolchainProgressE
         percent: clampPercent((current / total) * 100),
         message: trimmed,
         detail: linkingIkaBin
-          ? "Linking ika CLI binary (final step — can take 2–10 min on macOS)"
+          ? process.platform === "win32"
+            ? "Linking ika.exe (final step — can take 5–15 min on Windows)"
+            : "Linking ika CLI binary (final step — can take 2–10 min on macOS)"
           : linking
             ? `Linking ${current} of ${total} crates`
             : `Compiled ${current} of ${total} crates`,
@@ -121,6 +123,33 @@ export function parseCargoProgressLine(line: string): Partial<ToolchainProgressE
       message: trimmed,
       detail:
         "Another cargo build is using the artifact directory. Cancel, wait, or stale processes will be cleaned up on retry.",
+    };
+  }
+
+  const gitProgress = trimmed.match(
+    /^\s*(Fetch|Checkout)\s+\[[#=>.\s-]+\]\s+(\d+(?:\.\d+)?)%/i,
+  );
+  if (gitProgress) {
+    const action = gitProgress[1];
+    const percent = clampPercent(Number(gitProgress[2]));
+    return {
+      phase: "downloading",
+      percent,
+      message: trimmed,
+      detail:
+        action.toLowerCase() === "checkout"
+          ? "Checking out a large git dependency (e.g. MystenLabs/sui). First Ika build can take 30–60 min on Windows — keep Beluga open."
+          : "Downloading git dependencies for Ika. Large repos are normal on the first build.",
+    };
+  }
+
+  if (/Updating git (repository|submodule)/i.test(trimmed)) {
+    return {
+      phase: "downloading",
+      percent: null,
+      message: trimmed,
+      detail:
+        "Fetching git dependencies (MystenLabs/sui and others). This phase is slow but expected — do not cancel.",
     };
   }
 

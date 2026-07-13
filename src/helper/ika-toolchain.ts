@@ -188,6 +188,105 @@ function assertSpaceFreeToolchainPath(repoPath: string) {
   }
 }
 
+function ikaCargoBuildEnv(): NodeJS.ProcessEnv {
+  return {
+    ...toolchainEnv(),
+    CARGO_TERM_PROGRESS_WHEN: "always",
+    CARGO_TERM_PROGRESS_WIDTH: "80",
+    GIT_TERMINAL_PROMPT: "0",
+    CARGO_NET_GIT_FETCH_WITH_CLI: "true",
+  };
+}
+
+function ikaBinaryStartMessage(): string {
+  if (process.platform === "win32") {
+    return (
+      "Building Ika CLI (cargo build --release). " +
+      "First run downloads MystenLabs/sui and other git deps — often 30–60 minutes on Windows. " +
+      "Fetch/Checkout lines in the log are normal; keep Beluga open until Finished release."
+    );
+  }
+  return (
+    "Building Ika CLI (cargo build --release). First run may take 10–30 minutes..."
+  );
+}
+
+async function prepareIkaRepoForCargoBuild(repoPath: string): Promise<void> {
+  const commands: Array<[string, ...string[]]> = [
+    ["-C", repoPath, "config", "core.longpaths", "true"],
+  ];
+
+  for (const args of commands) {
+    try {
+      await execFileAsync("git", args, {
+        timeout: 30_000,
+        env: toolchainEnv(),
+      });
+    } catch {
+      // non-fatal — build may still succeed
+    }
+  }
+}
+
+async function assertWindowsMsvcForCargo(): Promise<void> {
+  if (process.platform !== "win32") return;
+
+  try {
+    await execFileAsync("rustc", ["-vV"], {
+      timeout: 15_000,
+      env: toolchainEnv(),
+    });
+  } catch {
+    throw new Error(
+      "Rust is required before building Ika. Install Rust under Packages → Toolchain, then retry.",
+    );
+  }
+
+  try {
+    await execFileAsync("where", ["link.exe"], {
+      timeout: 10_000,
+      env: toolchainEnv(),
+    });
+    return;
+  } catch {
+    // fall through to vswhere
+  }
+
+  const programFilesX86 =
+    process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+  const vswhere = path.join(
+    programFilesX86,
+    "Microsoft Visual Studio",
+    "Installer",
+    "vswhere.exe",
+  );
+
+  if (await pathExists(vswhere)) {
+    try {
+      const { stdout } = await execFileAsync(
+        vswhere,
+        [
+          "-latest",
+          "-requires",
+          "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+          "-property",
+          "installationPath",
+        ],
+        { timeout: 15_000 },
+      );
+      if (stdout.trim()) return;
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new Error(
+    "Microsoft C++ Build Tools are required to compile Ika on Windows. " +
+      'Install "Desktop development with C++" from Visual Studio Build Tools ' +
+      "(https://visualstudio.microsoft.com/visual-cpp-build-tools/), then restart Beluga and rebuild.",
+  );
+}
+
 export async function cloneIkaRepository(
   emit?: ToolchainProgressEmitter,
 ): Promise<InstallResult> {
@@ -306,20 +405,18 @@ export async function buildIkaBinary(
     });
   }
 
+    await assertWindowsMsvcForCargo();
+    await prepareIkaRepoForCargoBuild(repoPath);
+
     const { code, stdout, stderr, logs } = await runProcessWithProgress(
       {
         job: "ika-binary",
         command: "cargo",
         args: ["build", "--release", "--bin", "ika", "--no-default-features"],
         cwd: repoPath,
-        env: {
-          ...toolchainEnv(),
-          CARGO_TERM_PROGRESS_WHEN: "always",
-          CARGO_TERM_PROGRESS_WIDTH: "80",
-        },
+        env: ikaCargoBuildEnv(),
         parseLine: parseCargoProgressLine,
-        startMessage:
-          "Building Ika CLI (cargo build --release). First run may take 10–30 minutes...",
+        startMessage: ikaBinaryStartMessage(),
       },
       emit ?? (() => undefined),
     );
