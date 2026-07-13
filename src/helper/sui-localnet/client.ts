@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { toolchainEnv } from "../sui-toolchain";
+import { getManagedSuiBinary, toolchainEnv } from "../sui-toolchain";
 import { pushLog } from "./runtime";
 import type { SuiClientStatus } from "./types";
 
@@ -12,17 +12,14 @@ export const DEFAULT_RPC_URL = "http://127.0.0.1:9000";
 export const DEFAULT_TESTNET_RPC = "https://fullnode.testnet.sui.io:443";
 const LOCAL_ENV_ALIASES = ["local", "localnet"];
 
-function resolveSuiBinary() {
-  return process.env.SUI_BIN || "sui";
-}
-
 function getConfigPath() {
   return path.join(os.homedir(), ".sui", "sui_config", "client.yaml");
 }
 
 export async function runSui(args: string[]) {
+  const suiBinary = await getManagedSuiBinary();
   pushLog(`$ sui ${args.join(" ")}`);
-  const { stdout, stderr } = await execFileAsync(resolveSuiBinary(), args, {
+  const { stdout, stderr } = await execFileAsync(suiBinary, args, {
     timeout: 120_000,
     maxBuffer: 5 * 1024 * 1024,
     env: toolchainEnv(),

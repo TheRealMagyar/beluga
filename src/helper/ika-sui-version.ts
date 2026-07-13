@@ -54,16 +54,28 @@ export function formatIkaSuiVersionMismatchHint(params: {
   installed: string | null;
   requiredTag: string;
   requiredVersion: string;
+  suiBinaryPath?: string | null;
+  installError?: string | null;
 }): string {
   const installSpec = suiupInstallSpecForTag(params.requiredTag);
   const installedLabel = params.installed?.trim() || "not installed";
+  const binaryLine = params.suiBinaryPath
+    ? `Binary used: ${params.suiBinaryPath}\n`
+    : "";
+  const installLine = params.installError
+    ? `\nAuto-install attempt:\n${params.installError}\n`
+    : "";
   return (
     `Sui CLI version mismatch for Ika localnet.\n\n` +
     `Installed: ${installedLabel}\n` +
+    binaryLine +
     `Required: ${params.requiredVersion} (Ika pin ${params.requiredTag})\n\n` +
-    `Ika talks to Sui over gRPC during bootstrap; older Sui builds only expose JSON-RPC and fail with HTTP 404.\n\n` +
-    `Open Packages → Toolchain and update Sui CLI, or run:\n\n` +
-    `suiup install ${installSpec} -y\n\n` +
+    `Packages → Toolchain "Update Sui" installs the latest testnet release — that is not the same as Ika's pinned mainnet version.\n\n` +
+    `Ika talks to Sui over gRPC during bootstrap; older Sui builds only expose JSON-RPC and fail with HTTP 404.` +
+    installLine +
+    `\nRun in Terminal:\n\n` +
+    `suiup install ${installSpec} -y\n` +
+    `suiup default set ${installSpec}\n\n` +
     `Then press Reset in the Ika CLI panel and Start again.`
   );
 }
@@ -101,6 +113,8 @@ async function installPinnedSui(
   }
 
   const installResult = await installSuiForIkaPin(pinnedTag);
+  const { invalidateManagedSuiBinaryCache } = await import("./sui-toolchain");
+  invalidateManagedSuiBinaryCache();
   return { ...installResult, upgraded: installResult.success };
 }
 
@@ -108,7 +122,9 @@ export async function ensureSuiMatchesIkaPin(options: {
   autoInstall?: boolean;
   repoPath?: string;
 } = {}): Promise<EnsureSuiForIkaResult> {
-  const { getToolchainStatus } = await import("./sui-toolchain");
+  const { getManagedSuiBinary, getToolchainStatus } = await import(
+    "./sui-toolchain"
+  );
   const requiredTag = await readIkaPinnedSuiTag(options.repoPath);
   const requiredVersion =
     parseSuiTagVersion(requiredTag) ??
@@ -135,18 +151,20 @@ export async function ensureSuiMatchesIkaPin(options: {
     };
   }
 
+  const suiBinaryPath = await getManagedSuiBinary();
+
   if (options.autoInstall) {
     const install = await installPinnedSui(requiredTag);
     if (!install.success) {
       return {
         ok: false,
-        message:
-          `${install.message}\n\n` +
-          formatIkaSuiVersionMismatchHint({
-            installed: installedLine,
-            requiredTag,
-            requiredVersion,
-          }),
+        message: formatIkaSuiVersionMismatchHint({
+          installed: installedLine,
+          requiredTag,
+          requiredVersion,
+          suiBinaryPath,
+          installError: install.message,
+        }),
         upgraded: false,
         installedVersion,
         requiredTag,
@@ -154,6 +172,7 @@ export async function ensureSuiMatchesIkaPin(options: {
       };
     }
 
+    const afterBinaryPath = await getManagedSuiBinary();
     const after = await getToolchainStatus();
     const afterLine = after.sui.version;
     const afterVersion = afterLine ? parseSuiCliVersionLine(afterLine) : null;
@@ -173,6 +192,10 @@ export async function ensureSuiMatchesIkaPin(options: {
         installed: afterLine ?? installedLine,
         requiredTag,
         requiredVersion,
+        suiBinaryPath: afterBinaryPath,
+        installError:
+          "suiup reported success, but Beluga still sees the old Sui binary. " +
+          "Another sui.exe may be earlier on PATH — run suiup default set and restart Beluga.",
       }),
       upgraded: install.upgraded,
       installedVersion: afterVersion ?? installedVersion,
@@ -187,6 +210,7 @@ export async function ensureSuiMatchesIkaPin(options: {
       installed: installedLine,
       requiredTag,
       requiredVersion,
+      suiBinaryPath,
     }),
     upgraded: false,
     installedVersion,

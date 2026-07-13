@@ -121,6 +121,7 @@ export async function startIkaLocalnetStack(): Promise<IkaLocalnetStackActionRes
   const toolchainRoot = await ensureBelugaToolchainWritable();
   appendLocalNetworkLog(`Using toolchain at ${toolchainRoot}`);
 
+  appendLocalNetworkLog("Checking Sui CLI version for Ika compatibility…");
   const suiVersionCheck = await ensureSuiMatchesIkaPin({ autoInstall: true });
   if (!suiVersionCheck.ok) {
     throw new Error(suiVersionCheck.message);

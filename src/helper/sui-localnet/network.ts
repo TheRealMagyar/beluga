@@ -18,7 +18,7 @@ import {
   withBelugaTmpEnv,
 } from "../beluga-toolchain-path";
 import { spawnWithLineBufferedLogs } from "../localnet-process";
-import { toolchainEnv } from "../sui-toolchain";
+import { getManagedSuiBinary, toolchainEnv } from "../sui-toolchain";
 import {
   DEFAULT_RPC_URL,
   ensureLocalEnvironment,
@@ -48,10 +48,6 @@ export const DEFAULT_FAUCET_URL = "http://127.0.0.1:9123";
 
 function resolveSuiLocalnetDir(forIka = false) {
   return getBelugaSuiLocalnetDir(forIka);
-}
-
-function resolveSuiBinary() {
-  return process.env.SUI_BIN || "sui";
 }
 
 function sleep(ms: number) {
@@ -151,7 +147,7 @@ export interface WaitForLocalFaucetOptions {
 }
 
 async function resolveSuiFaucetBinary(): Promise<string | null> {
-  const suiBin = resolveSuiBinary();
+  const suiBin = await getManagedSuiBinary();
   const names =
     process.platform === "win32"
       ? ["sui-faucet.exe", "sui-faucet"]
@@ -456,7 +452,7 @@ function buildSuiStartArgs(options: StartLocalNetworkOptions): string[] {
   return args;
 }
 
-function spawnSuiLocalnetProcess(
+async function spawnSuiLocalnetProcess(
   args: string[],
   belugaTmpDir: string,
   withFaucet: boolean,
@@ -466,7 +462,8 @@ function spawnSuiLocalnetProcess(
     withFaucet && process.platform === "win32"
       ? "off,sui_node=info,sui_faucet=info"
       : "off,sui_node=info";
-  const child = spawnWithLineBufferedLogs(resolveSuiBinary(), args, {
+  const suiBinary = await getManagedSuiBinary();
+  const child = spawnWithLineBufferedLogs(suiBinary, args, {
     env: {
       ...withBelugaTmpEnv(toolchainEnv(), belugaTmpDir),
       RUST_LOG: rustLog,
@@ -520,7 +517,8 @@ export async function startLocalNetwork(
     throw new Error("Local network is already running in Beluga.");
   }
 
-  const cli = await execFileAsync(resolveSuiBinary(), ["--version"], {
+  const suiBinary = await getManagedSuiBinary();
+  const cli = await execFileAsync(suiBinary, ["--version"], {
     timeout: 10_000,
     env: toolchainEnv(),
   }).catch(() => null);
@@ -583,13 +581,13 @@ export async function startLocalNetwork(
     `Profile: ${requestedForIka ? "Ika-compatible" : "Move playground"} · config ${networkDir}`,
   );
   try {
-    const { stdout } = await execFileAsync(resolveSuiBinary(), ["--version"], {
+    const { stdout } = await execFileAsync(suiBinary, ["--version"], {
       timeout: 10_000,
       env: toolchainEnv(),
     });
-    pushLog(`Sui binary: ${stdout.trim().split("\n")[0]}`);
+    pushLog(`Sui binary: ${stdout.trim().split("\n")[0]} (${suiBinary})`);
   } catch {
-    pushLog(`Sui binary: ${resolveSuiBinary()}`);
+    pushLog(`Sui binary: ${suiBinary}`);
   }
   pushLog(`Using writable temp dir ${belugaTmpDir} for Sui.`);
   suiLocalnetRuntime.localNetworkStartedAt = Date.now();
@@ -600,7 +598,7 @@ export async function startLocalNetwork(
     await ensureLocalnetFaucetAssets(networkDir, requestedForIka);
   }
 
-  spawnSuiLocalnetProcess(buildSuiStartArgs(options), belugaTmpDir, withFaucet);
+  await spawnSuiLocalnetProcess(buildSuiStartArgs(options), belugaTmpDir, withFaucet);
 
   const ready = await waitForLocalRpcReady(120_000);
   if (!ready) {

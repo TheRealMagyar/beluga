@@ -157,8 +157,75 @@ function rustPermissionFixHint(): string {
   );
 }
 
-function resolveSuiBinary() {
-  return process.env.SUI_BIN || "sui";
+let cachedManagedSuiBin: string | null = null;
+
+export function invalidateManagedSuiBinaryCache() {
+  cachedManagedSuiBin = null;
+}
+
+function managedSuiCandidatePaths(): string[] {
+  const candidates: string[] = [];
+  if (process.platform === "win32") {
+    candidates.push(path.join(getWindowsLocalBinDir(), "sui.exe"));
+  } else {
+    candidates.push(path.join(os.homedir(), ".local", "bin", "sui"));
+  }
+  return candidates;
+}
+
+function parseSuiupWhichPaths(stdout: string): string[] {
+  const paths: string[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/[\\/]sui(\.exe)?$/i.test(trimmed)) {
+      paths.push(trimmed);
+      continue;
+    }
+    paths.push(
+      process.platform === "win32"
+        ? path.join(trimmed, "sui.exe")
+        : path.join(trimmed, "sui"),
+    );
+  }
+  return paths;
+}
+
+/** Prefer suiup-managed binaries over stale PATH copies (common on Windows). */
+export async function getManagedSuiBinary(): Promise<string> {
+  if (process.env.SUI_BIN?.trim()) {
+    return process.env.SUI_BIN.trim();
+  }
+  if (cachedManagedSuiBin) {
+    return cachedManagedSuiBin;
+  }
+
+  const candidates: string[] = [];
+
+  try {
+    const { stdout } = await execFileAsync("suiup", ["which"], {
+      timeout: 15_000,
+      env: toolchainEnv(),
+    });
+    candidates.push(...parseSuiupWhichPaths(stdout));
+  } catch {
+    // suiup not installed yet
+  }
+
+  candidates.push(...managedSuiCandidatePaths());
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      cachedManagedSuiBin = candidate;
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+
+  cachedManagedSuiBin = "sui";
+  return "sui";
 }
 
 async function suiupHasSuiBinary(): Promise<boolean> {
@@ -185,9 +252,42 @@ function installSuiViaSuiup(label = "Sui CLI (suiup)") {
 export async function installSuiForIkaPin(
   pinnedTag: string,
 ): Promise<InstallResult> {
-  const { suiupInstallSpecForTag } = await import("./ika-sui-version");
-  const spec = suiupInstallSpecForTag(pinnedTag);
-  return runCommand("suiup", ["install", spec, "-y"], `Sui CLI (${spec})`);
+  const { parseSuiTagVersion, suiupInstallSpecForTag } = await import(
+    "./ika-sui-version"
+  );
+  const version = parseSuiTagVersion(pinnedTag);
+  const specs = [
+    suiupInstallSpecForTag(pinnedTag),
+    version ? `sui@mainnet-v${version}` : null,
+    version ? `sui@mainnet-${version}` : null,
+    "sui@mainnet",
+  ].filter((value, index, all): value is string => {
+    return Boolean(value) && all.indexOf(value) === index;
+  });
+
+  let lastResult: InstallResult | null = null;
+  for (const spec of specs) {
+    const result = await runCommand(
+      "suiup",
+      ["install", spec, "-y"],
+      `Sui CLI (${spec})`,
+    );
+    lastResult = result;
+    if (!result.success) continue;
+
+    await runCommand("suiup", ["default", "set", spec], "Sui default version");
+    invalidateManagedSuiBinaryCache();
+    return result;
+  }
+
+  return (
+    lastResult ?? {
+      success: false,
+      message: "Could not install a Sui CLI matching Ika's pinned version.",
+      stdout: "",
+      stderr: "",
+    }
+  );
 }
 
 async function probeBinary(
@@ -273,11 +373,12 @@ async function runCommand(
 }
 
 export async function getToolchainStatus(): Promise<ToolchainStatus> {
+  const managedSui = await getManagedSuiBinary();
   const [rust, cargo, suiup, suiProbe] = await Promise.all([
     probeBinary("rustc"),
     probeBinary("cargo"),
     probeBinary("suiup"),
-    probeBinary(resolveSuiBinary()),
+    probeBinary(managedSui),
   ]);
 
   let sui = suiProbe;
