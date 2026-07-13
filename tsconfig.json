@@ -14,7 +14,10 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["src/*"],
-      "@ika.xyz/sdk": ["vendor/@ika.xyz/sdk/dist/esm"],
+      "@ika.xyz/sdk": [
+        "node_modules/@ika.xyz/sdk/dist/esm",
+        "vendor/@ika.xyz/sdk/dist/esm"
+      ],
       "@ika.xyz/ika-wasm": ["src/renderer/lib/ika-wasm-entry.ts"]
     }
   },

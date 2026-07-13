@@ -1,7 +1,21 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'vite';
 
-const ikaSdkRoot = path.resolve(process.cwd(), 'vendor/@ika.xyz/sdk/dist/esm');
+function resolveIkaSdkRoot(): string {
+  const vendorSdk = path.resolve(process.cwd(), 'vendor/@ika.xyz/sdk/dist/esm');
+  if (fs.existsSync(vendorSdk)) return vendorSdk;
+
+  const installedSdk = path.resolve(
+    process.cwd(),
+    'node_modules/@ika.xyz/sdk/dist/esm',
+  );
+  if (fs.existsSync(installedSdk)) return installedSdk;
+
+  return vendorSdk;
+}
+
+const ikaSdkRoot = resolveIkaSdkRoot();
 const ikaWasmEntry = path.resolve(
   process.cwd(),
   'src/renderer/lib/ika-wasm-entry.ts',
