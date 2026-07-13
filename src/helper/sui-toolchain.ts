@@ -161,6 +161,27 @@ function resolveSuiBinary() {
   return process.env.SUI_BIN || "sui";
 }
 
+async function suiupHasSuiBinary(): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync("suiup", ["show"], {
+      timeout: 15_000,
+      maxBuffer: 1024 * 1024,
+      env: toolchainEnv(),
+    });
+    const normalized = stdout.toLowerCase();
+    if (/binary sui not found|no installed binaries/i.test(normalized)) {
+      return false;
+    }
+    return /\bsui\b/.test(normalized);
+  } catch {
+    return false;
+  }
+}
+
+function installSuiViaSuiup(label = "Sui CLI (suiup)") {
+  return runCommand("suiup", ["install", "sui@testnet", "-y"], label);
+}
+
 async function probeBinary(
   binary: string,
   args: string[] = ["--version"],
@@ -244,12 +265,17 @@ async function runCommand(
 }
 
 export async function getToolchainStatus(): Promise<ToolchainStatus> {
-  const [rust, cargo, suiup, sui] = await Promise.all([
+  const [rust, cargo, suiup, suiProbe] = await Promise.all([
     probeBinary("rustc"),
     probeBinary("cargo"),
     probeBinary("suiup"),
     probeBinary(resolveSuiBinary()),
   ]);
+
+  let sui = suiProbe;
+  if (suiup.installed && !(await suiupHasSuiBinary())) {
+    sui = { installed: false, version: null, path: null };
+  }
 
   return {
     rust,
@@ -383,11 +409,7 @@ export async function installSuiCli(
     }
   }
 
-  return runCommand(
-    "suiup",
-    ["install", "sui@testnet", "-y"],
-    "Sui CLI (suiup)",
-  );
+  return installSuiViaSuiup();
 }
 
 export async function updateRust(): Promise<InstallResult> {
@@ -438,14 +460,22 @@ export async function uninstallSuiup(): Promise<InstallResult> {
 export async function updateSuiCli(): Promise<InstallResult> {
   const status = await getToolchainStatus();
   if (status.suiup.installed) {
-    if (!status.sui.installed) {
-      return runCommand(
-        "suiup",
-        ["install", "sui@testnet", "-y"],
-        "Sui CLI install",
-      );
+    if (!(await suiupHasSuiBinary())) {
+      return installSuiViaSuiup("Sui CLI install");
     }
-    return runCommand("suiup", ["update", "sui"], "Sui CLI update");
+
+    const updateResult = await runCommand(
+      "suiup",
+      ["update", "sui"],
+      "Sui CLI update",
+    );
+    if (
+      !updateResult.success &&
+      /Binary sui not found|suiup install/i.test(updateResult.message)
+    ) {
+      return installSuiViaSuiup("Sui CLI install");
+    }
+    return updateResult;
   }
   if (process.platform === "darwin") {
     return runCommand("brew", ["upgrade", "sui"], "Sui CLI update (Homebrew)");
