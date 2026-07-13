@@ -141,10 +141,31 @@ export function buildWindowsCargoCommand(
   vcvars64: string,
   cargoArgs: string[],
 ): { command: string; args: string[] } {
+  if (!pathExistsSync(vcvars64)) {
+    throw new Error(
+      `MSVC environment script not found at ${vcvars64}. ` +
+        'Reinstall Visual Studio Build Tools with "Desktop development with C++".',
+    );
+  }
+
   const cargoCmd = ["cargo", ...cargoArgs].map(quoteCmdToken).join(" ");
-  const script = `call ${quoteCmdToken(vcvars64)} >nul && ${cargoCmd}`;
+  // PowerShell here-string avoids cmd.exe /s quote-stripping breaking spaced paths.
+  const script = [
+    "$vcvars = @'",
+    vcvars64,
+    "'@",
+    `cmd /c "call \`"$vcvars\`" >nul && ${cargoCmd}"`,
+  ].join("\r\n");
+
   return {
-    command: "cmd.exe",
-    args: ["/d", "/s", "/c", script],
+    command: "powershell.exe",
+    args: [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script,
+    ],
   };
 }
