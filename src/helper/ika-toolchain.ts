@@ -30,6 +30,10 @@ import {
   getIkaVendorRoot,
   getIkaWasmWebDir,
 } from "./ika-vendor-path";
+import {
+  buildWindowsCargoCommand,
+  resolveWindowsMsvcForCargo,
+} from "./windows-msvc";
 
 const execFileAsync = promisify(execFile);
 
@@ -228,9 +232,7 @@ async function prepareIkaRepoForCargoBuild(repoPath: string): Promise<void> {
   }
 }
 
-async function assertWindowsMsvcForCargo(): Promise<void> {
-  if (process.platform !== "win32") return;
-
+async function assertRustForCargoBuild(): Promise<void> {
   try {
     await execFileAsync("rustc", ["-vV"], {
       timeout: 15_000,
@@ -241,50 +243,6 @@ async function assertWindowsMsvcForCargo(): Promise<void> {
       "Rust is required before building Ika. Install Rust under Packages → Toolchain, then retry.",
     );
   }
-
-  try {
-    await execFileAsync("where", ["link.exe"], {
-      timeout: 10_000,
-      env: toolchainEnv(),
-    });
-    return;
-  } catch {
-    // fall through to vswhere
-  }
-
-  const programFilesX86 =
-    process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
-  const vswhere = path.join(
-    programFilesX86,
-    "Microsoft Visual Studio",
-    "Installer",
-    "vswhere.exe",
-  );
-
-  if (await pathExists(vswhere)) {
-    try {
-      const { stdout } = await execFileAsync(
-        vswhere,
-        [
-          "-latest",
-          "-requires",
-          "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-          "-property",
-          "installationPath",
-        ],
-        { timeout: 15_000 },
-      );
-      if (stdout.trim()) return;
-    } catch {
-      // fall through
-    }
-  }
-
-  throw new Error(
-    "Microsoft C++ Build Tools are required to compile Ika on Windows. " +
-      'Install "Desktop development with C++" from Visual Studio Build Tools ' +
-      "(https://visualstudio.microsoft.com/visual-cpp-build-tools/), then restart Beluga and rebuild.",
-  );
 }
 
 export async function cloneIkaRepository(
@@ -405,18 +363,27 @@ export async function buildIkaBinary(
     });
   }
 
-    await assertWindowsMsvcForCargo();
+    await assertRustForCargoBuild();
     await prepareIkaRepoForCargoBuild(repoPath);
+
+    const buildEnv = ikaCargoBuildEnv();
+    const cargoArgs = ["build", "--release", "--bin", "ika", "--no-default-features"];
+    const msvcLaunch = await resolveWindowsMsvcForCargo(buildEnv);
+    const cargoCommand = msvcLaunch
+      ? buildWindowsCargoCommand(msvcLaunch.vcvars64, cargoArgs)
+      : { command: "cargo", args: cargoArgs };
 
     const { code, stdout, stderr, logs } = await runProcessWithProgress(
       {
         job: "ika-binary",
-        command: "cargo",
-        args: ["build", "--release", "--bin", "ika", "--no-default-features"],
+        command: cargoCommand.command,
+        args: cargoCommand.args,
         cwd: repoPath,
-        env: ikaCargoBuildEnv(),
+        env: buildEnv,
         parseLine: parseCargoProgressLine,
-        startMessage: ikaBinaryStartMessage(),
+        startMessage: msvcLaunch
+          ? `${ikaBinaryStartMessage()} Using MSVC from ${msvcLaunch.installationPath}.`
+          : ikaBinaryStartMessage(),
       },
       emit ?? (() => undefined),
     );
