@@ -124,16 +124,56 @@ export function registerConsoleIpc() {
   );
 }
 
+const TERMINAL_BATCH_MS = process.platform === "win32" ? 40 : 24;
+const terminalBatch = new Map<
+  string,
+  { stdout: string; stderr: string; timer: ReturnType<typeof setTimeout> | null }
+>();
+
+function flushTerminalBatch(sessionId: string) {
+  const entry = terminalBatch.get(sessionId);
+  if (!entry) return;
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+  const { stdout, stderr } = entry;
+  entry.stdout = "";
+  entry.stderr = "";
+  for (const win of [getMainWindow(), getConsoleWindow()]) {
+    if (win && !win.isDestroyed()) {
+      if (stdout) {
+        win.webContents.send("console:terminal-data", {
+          sessionId,
+          data: stdout,
+          stream: "stdout",
+        });
+      }
+      if (stderr) {
+        win.webContents.send("console:terminal-data", {
+          sessionId,
+          data: stderr,
+          stream: "stderr",
+        });
+      }
+    }
+  }
+}
+
 export function broadcastTerminalOutput(
   sessionId: string,
   data: string,
   stream: "stdout" | "stderr",
 ) {
-  for (const win of [getMainWindow(), getConsoleWindow()]) {
-    if (win && !win.isDestroyed()) {
-      win.webContents.send("console:terminal-data", { sessionId, data, stream });
-    }
+  let entry = terminalBatch.get(sessionId);
+  if (!entry) {
+    entry = { stdout: "", stderr: "", timer: null };
+    terminalBatch.set(sessionId, entry);
   }
+  if (stream === "stderr") entry.stderr += data;
+  else entry.stdout += data;
+  if (entry.timer) return;
+  entry.timer = setTimeout(() => flushTerminalBatch(sessionId), TERMINAL_BATCH_MS);
 }
 
 export function broadcastTerminalExit(sessionId: string, code: number | null) {

@@ -181,9 +181,12 @@ export function ChainDiagnosticsPanel({
   useEffect(() => {
     if (!open) return;
     void refresh();
+    const pollMs =
+      window.electronAPI?.platform === "win32" ? 8_000 : 3_000;
     const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       void refresh();
-    }, 3000);
+    }, pollMs);
     return () => window.clearInterval(timer);
   }, [open, refresh]);
 

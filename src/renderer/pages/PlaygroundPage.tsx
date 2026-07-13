@@ -312,14 +312,17 @@ export function PlaygroundPage() {
       .then(setTestableProjects)
       .catch(() => setTestableProjects([]));
 
+    const pollMs =
+      window.electronAPI?.platform === "win32" ? 15_000 : 5_000;
     const pollIkaToolchain = () => {
+      if (document.visibilityState === "hidden") return;
       window.packages
         .getToolchainStatus()
         .then((status) => setIkaToolchainReady(status.ika.ready))
         .catch(() => setIkaToolchainReady(false));
     };
     pollIkaToolchain();
-    const timer = window.setInterval(pollIkaToolchain, 3000);
+    const timer = window.setInterval(pollIkaToolchain, pollMs);
     return () => window.clearInterval(timer);
   }, [refreshCliStatus, addLog]);
 

@@ -2,7 +2,7 @@ import path from "node:path";
 import {
   killProcessTree,
   pathRegexFragment,
-  pgrepByPattern,
+  pgrepByPatterns,
 } from "./platform-process";
 
 function sleep(ms: number) {
@@ -19,13 +19,7 @@ export async function findStaleIkaCargoPids(repoPath: string): Promise<number[]>
     "cargo(\\.exe)? build.*--bin ika",
   ];
 
-  const found = new Set<number>();
-  for (const pattern of patterns) {
-    for (const pid of await pgrepByPattern(pattern)) {
-      found.add(pid);
-    }
-  }
-  return [...found];
+  return pgrepByPatterns(patterns);
 }
 
 export async function killStaleIkaCargoProcesses(

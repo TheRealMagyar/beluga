@@ -29,6 +29,11 @@ let ikaLogs: StreamLogEntry[] = [];
 type ConsoleLogListener = (snapshot: ConsoleLogSnapshot) => void;
 const listeners = new Set<ConsoleLogListener>();
 
+const NOTIFY_THROTTLE_MS =
+  process.platform === "win32" ? 250 : 120;
+let notifyTimer: ReturnType<typeof setTimeout> | null = null;
+let notifyPending = false;
+
 function trim<T>(items: T[], max: number): T[] {
   if (items.length <= max) return items;
   return items.slice(items.length - max);
@@ -42,11 +47,28 @@ function snapshot(): ConsoleLogSnapshot {
   };
 }
 
-function notify() {
+function notifyNow() {
+  notifyTimer = null;
+  notifyPending = false;
   const current = snapshot();
   for (const listener of listeners) {
     listener(current);
   }
+}
+
+function notify() {
+  notifyPending = true;
+  if (notifyTimer) return;
+  notifyTimer = setTimeout(notifyNow, NOTIFY_THROTTLE_MS);
+}
+
+export function flushConsoleLogNotify() {
+  if (!notifyPending) return;
+  if (notifyTimer) {
+    clearTimeout(notifyTimer);
+    notifyTimer = null;
+  }
+  notifyNow();
 }
 
 export function subscribeConsoleLogs(listener: ConsoleLogListener) {

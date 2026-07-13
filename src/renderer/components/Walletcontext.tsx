@@ -162,8 +162,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    pollLocalNet()
-    const timer = window.setInterval(pollLocalNet, 3000)
+    const pollMs =
+      window.electronAPI?.platform === 'win32' ? 8_000 : 3_000
+    const pollLocalNetWithVisibility = () => {
+      if (document.visibilityState === 'hidden') return
+      void pollLocalNet()
+    }
+
+    pollLocalNetWithVisibility()
+    const timer = window.setInterval(pollLocalNetWithVisibility, pollMs)
     return () => window.clearInterval(timer)
   }, [fetchData])
 

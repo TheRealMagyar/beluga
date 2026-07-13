@@ -47,6 +47,13 @@ function resolveCargoBinDir(): string {
   return path.join(resolveCargoHome(), "bin");
 }
 
+function managedBinaryDirs(): string[] {
+  if (!cachedManagedSuiBin || !cachedManagedSuiBin.includes(path.sep)) {
+    return [];
+  }
+  return [path.dirname(cachedManagedSuiBin)];
+}
+
 export function augmentedPath() {
   const home = os.homedir();
   const cargoBin = resolveCargoBinDir();
@@ -64,7 +71,12 @@ export function augmentedPath() {
           path.join(home, ".local", "bin"),
           ...getNodeInstallPaths(),
         ];
-  return [...extra, ...getNodeInstallPaths(), process.env.PATH ?? ""]
+  return [
+    ...managedBinaryDirs(),
+    ...extra,
+    ...getNodeInstallPaths(),
+    process.env.PATH ?? "",
+  ]
     .filter(Boolean)
     .join(path.delimiter);
 }
@@ -138,6 +150,9 @@ export function toolchainEnv() {
   return withBelugaTmpEnv({
     ...process.env,
     PATH: augmentedPath(),
+    ...(cachedManagedSuiBin && cachedManagedSuiBin !== "sui"
+      ? { SUI_BIN: cachedManagedSuiBin }
+      : {}),
     CARGO_HOME: cargoHome,
     RUSTUP_HOME: rustupHome,
     XDG_CACHE_HOME: xdgCacheHome,
@@ -161,6 +176,11 @@ let cachedManagedSuiBin: string | null = null;
 
 export function invalidateManagedSuiBinaryCache() {
   cachedManagedSuiBin = null;
+}
+
+/** Resolve suiup-managed binaries before spawning shells or probing versions. */
+export async function warmToolchainBinaries(): Promise<void> {
+  await getManagedSuiBinary();
 }
 
 function managedSuiCandidatePaths(): string[] {
@@ -252,6 +272,8 @@ function installSuiViaSuiup(label = "Sui CLI (suiup)") {
 export async function installSuiForIkaPin(
   pinnedTag: string,
 ): Promise<InstallResult> {
+  const { invalidateToolchainStatusCache } = await import("./localnet-status-cache");
+  invalidateToolchainStatusCache();
   const { parseSuiTagVersion, suiupInstallSpecForTag } = await import(
     "./ika-sui-version"
   );
@@ -372,7 +394,16 @@ async function runCommand(
   }
 }
 
-export async function getToolchainStatus(): Promise<ToolchainStatus> {
+export async function getToolchainStatus(options?: {
+  force?: boolean;
+}): Promise<ToolchainStatus> {
+  if (!options?.force) {
+    const { readCachedToolchainStatus, storeCachedToolchainStatus } =
+      await import("./localnet-status-cache");
+    const cached = readCachedToolchainStatus<ToolchainStatus>();
+    if (cached) return cached;
+  }
+
   const managedSui = await getManagedSuiBinary();
   const [rust, cargo, suiup, suiProbe] = await Promise.all([
     probeBinary("rustc"),
@@ -386,13 +417,16 @@ export async function getToolchainStatus(): Promise<ToolchainStatus> {
     sui = { installed: false, version: null, path: null };
   }
 
-  return {
+  const status: ToolchainStatus = {
     rust,
     cargo,
     suiup,
     sui,
     platform: process.platform,
   };
+  const { storeCachedToolchainStatus } = await import("./localnet-status-cache");
+  storeCachedToolchainStatus(status);
+  return status;
 }
 
 async function runPowerShell(

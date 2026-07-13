@@ -2,7 +2,7 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { toolchainEnv } from "./sui-toolchain";
+import { getManagedSuiBinary, toolchainEnv, warmToolchainBinaries } from "./sui-toolchain";
 import { getPlaygroundWorkspace } from "./playground-cli";
 
 export interface TerminalSessionInfo {
@@ -145,6 +145,7 @@ export async function createTerminalSession(
   size?: { cols: number; rows: number },
 ): Promise<TerminalSessionInfo> {
   try {
+    await warmToolchainBinaries();
     const pty = await loadPty();
     const workspace = await ensureWorkspaceDir(
       cwd ?? (await getPlaygroundWorkspace()),
@@ -183,6 +184,17 @@ export async function createTerminalSession(
     });
 
     sessions.set(id, { proc, info });
+
+    const managedSui = await getManagedSuiBinary();
+    if (managedSui.includes(path.sep)) {
+      const managedDir = path.dirname(managedSui);
+      proc.write(
+        process.platform === "win32"
+          ? `$env:Path = '${managedDir};' + $env:Path\r\n`
+          : `export PATH='${managedDir}:$PATH'\n`,
+      );
+    }
+
     return info;
   } catch (err: unknown) {
     const message =

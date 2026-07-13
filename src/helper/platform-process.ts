@@ -33,6 +33,18 @@ type WindowsProcessRow = {
   commandLine: string;
 };
 
+const WIN_PROCESS_CACHE_MS = 8_000;
+let windowsProcessCache: {
+  at: number;
+  rows: WindowsProcessRow[];
+} | null = null;
+let windowsProcessScan: Promise<WindowsProcessRow[]> | null = null;
+
+export function invalidateWindowsProcessCache() {
+  windowsProcessCache = null;
+  windowsProcessScan = null;
+}
+
 function readWindowsProcessRowsSync(): WindowsProcessRow[] {
   const script = [
     "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue",
@@ -63,7 +75,19 @@ function readWindowsProcessRowsSync(): WindowsProcessRow[] {
   }
 }
 
-async function readWindowsProcessRows(): Promise<WindowsProcessRow[]> {
+async function readWindowsProcessRows(force = false): Promise<WindowsProcessRow[]> {
+  if (
+    !force &&
+    windowsProcessCache &&
+    Date.now() - windowsProcessCache.at < WIN_PROCESS_CACHE_MS
+  ) {
+    return windowsProcessCache.rows;
+  }
+
+  if (!force && windowsProcessScan) {
+    return windowsProcessScan;
+  }
+
   const script = [
     "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue",
     "| Where-Object { $_.CommandLine }",
@@ -71,26 +95,34 @@ async function readWindowsProcessRows(): Promise<WindowsProcessRow[]> {
     "| ConvertTo-Json -Compress -Depth 2",
   ].join(" ");
 
-  try {
-    const { stdout } = await execFileAsync(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", script],
-      { timeout: 15_000, maxBuffer: 12 * 1024 * 1024 },
-    );
-    if (!stdout.trim()) return [];
-    const parsed = JSON.parse(stdout.trim()) as
-      | { ProcessId?: number; CommandLine?: string }
-      | Array<{ ProcessId?: number; CommandLine?: string }>;
-    const rows = Array.isArray(parsed) ? parsed : [parsed];
-    return rows
-      .map((row) => ({
-        pid: Number(row.ProcessId),
-        commandLine: String(row.CommandLine ?? ""),
-      }))
-      .filter((row) => row.pid > 0 && row.commandLine.length > 0);
-  } catch {
-    return [];
-  }
+  windowsProcessScan = (async () => {
+    try {
+      const { stdout } = await execFileAsync(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", script],
+        { timeout: 15_000, maxBuffer: 12 * 1024 * 1024 },
+      );
+      if (!stdout.trim()) return [];
+      const parsed = JSON.parse(stdout.trim()) as
+        | { ProcessId?: number; CommandLine?: string }
+        | Array<{ ProcessId?: number; CommandLine?: string }>;
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      const normalized = rows
+        .map((row) => ({
+          pid: Number(row.ProcessId),
+          commandLine: String(row.CommandLine ?? ""),
+        }))
+        .filter((row) => row.pid > 0 && row.commandLine.length > 0);
+      windowsProcessCache = { at: Date.now(), rows: normalized };
+      return normalized;
+    } catch {
+      return windowsProcessCache?.rows ?? [];
+    } finally {
+      windowsProcessScan = null;
+    }
+  })();
+
+  return windowsProcessScan;
 }
 
 function matchCommandLinePattern(commandLine: string, pattern: string): boolean {
@@ -140,22 +172,58 @@ function pgrepByPatternUnixSync(pattern: string): number[] {
   }
 }
 
+function filterWindowsProcessesByPatterns(
+  processes: WindowsProcessRow[],
+  patterns: string[],
+): number[] {
+  const found = new Set<number>();
+  for (const pattern of patterns) {
+    for (const entry of processes) {
+      if (matchCommandLinePattern(entry.commandLine, pattern)) {
+        found.add(entry.pid);
+      }
+    }
+  }
+  return uniquePids([...found]);
+}
+
 async function pgrepByPatternWindows(pattern: string): Promise<number[]> {
   const processes = await readWindowsProcessRows();
-  return uniquePids(
-    processes
-      .filter((entry) => matchCommandLinePattern(entry.commandLine, pattern))
-      .map((entry) => entry.pid),
-  );
+  return filterWindowsProcessesByPatterns(processes, [pattern]);
 }
 
 function pgrepByPatternWindowsSync(pattern: string): number[] {
   const processes = readWindowsProcessRowsSync();
-  return uniquePids(
-    processes
-      .filter((entry) => matchCommandLinePattern(entry.commandLine, pattern))
-      .map((entry) => entry.pid),
-  );
+  return filterWindowsProcessesByPatterns(processes, [pattern]);
+}
+
+/** One PowerShell scan for many patterns (Windows only). */
+export async function pgrepByPatterns(patterns: string[]): Promise<number[]> {
+  if (process.platform !== "win32") {
+    const found = new Set<number>();
+    for (const pattern of patterns) {
+      for (const pid of await pgrepByPatternUnix(pattern)) {
+        found.add(pid);
+      }
+    }
+    return uniquePids([...found]);
+  }
+  const processes = await readWindowsProcessRows();
+  return filterWindowsProcessesByPatterns(processes, patterns);
+}
+
+export function pgrepByPatternsSync(patterns: string[]): number[] {
+  if (process.platform !== "win32") {
+    const found = new Set<number>();
+    for (const pattern of patterns) {
+      for (const pid of pgrepByPatternUnixSync(pattern)) {
+        found.add(pid);
+      }
+    }
+    return uniquePids([...found]);
+  }
+  const processes = readWindowsProcessRowsSync();
+  return filterWindowsProcessesByPatterns(processes, patterns);
 }
 
 export async function pgrepByPattern(pattern: string): Promise<number[]> {

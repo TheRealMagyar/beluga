@@ -23,6 +23,10 @@ import {
 } from "./constants";
 import { repoIsReady, waitForIkaConfig } from "./config";
 import {
+  bumpIkaLocalnetStatusCache,
+  getIkaLocalnetStatus,
+} from "./status";
+import {
   detectIkaFatalStartupError,
   pushIkaLog,
   sessionIkaLogMessages,
@@ -46,7 +50,6 @@ import {
 import { ikaLocalnetRuntime } from "./runtime";
 import { clearLocalnetSession } from "./session";
 import { resetIkaLocalnetState, wipeIkaPersistedState } from "./state";
-import { getIkaLocalnetStatus } from "./status";
 import type { IkaLocalnetStatus, StartIkaLocalnetOptions } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -175,6 +178,7 @@ export async function startIkaLocalnet(
     await resetIkaLocalnetState();
   }
 
+  bumpIkaLocalnetStatusCache();
   ikaLocalnetRuntime.ikaLogs.length = 0;
   ikaLocalnetRuntime.ikaLogSessionStart = 0;
   broadcastLocalnetLogs("ika", ikaLocalnetRuntime.ikaLogs);
@@ -239,6 +243,12 @@ export async function startIkaLocalnet(
     command = releaseBinary;
     args = startArgs;
   } catch {
+    if (process.platform === "win32") {
+      throw new Error(
+        "Ika CLI binary is not built yet. On Windows, build it first from Packages → Toolchain → Build Ika CLI " +
+          "(expect 30–60 minutes). Beluga will not compile Ika in the background during localnet start because it can freeze the machine.",
+      );
+    }
     pushIkaLog("Ika binary not found — compiling via cargo run (first run may take a while)...");
   }
 
@@ -346,6 +356,7 @@ export async function startIkaLocalnet(
 }
 
 export async function stopIkaLocalnet(): Promise<IkaLocalnetStatus> {
+  bumpIkaLocalnetStatusCache();
   await refreshLocalnetSessionSnapshot();
 
   const repoPath = getIkaRepoPath();

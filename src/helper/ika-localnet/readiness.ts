@@ -1,4 +1,8 @@
 import {
+  readCachedIkaReadiness,
+  storeCachedIkaReadiness,
+} from "../localnet-status-cache";
+import {
   getBelugaToolchainRoot,
   getIkaNetworkConfigPath,
   isBelugaToolchainWritable,
@@ -110,6 +114,7 @@ function readEncryptionKeyStateVariant(
 export async function probeIkaChainReadiness(
   config: IkaLocalnetConfigFile,
 ): Promise<IkaChainReadiness> {
+  const cacheKey = `${config.objects.ika_system_object_id}:${config.objects.ika_dwallet_coordinator_object_id}`;
   const empty: IkaChainReadiness = {
     dkgChunksReady: false,
     dkgChunkCount: 0,
@@ -123,6 +128,11 @@ export async function probeIkaChainReadiness(
     dwalletReady: false,
     readinessHint: "Ika on-chain state is not available yet.",
   };
+
+  const cachedReady = readCachedIkaReadiness(cacheKey, true);
+  if (cachedReady?.dwalletReady) return cachedReady;
+  const cachedProbe = readCachedIkaReadiness(cacheKey, false);
+  if (cachedProbe) return cachedProbe;
 
   try {
     if (!(await verifyIkaConfigMatchesPersistedState(config))) {
@@ -257,7 +267,7 @@ export async function probeIkaChainReadiness(
 
     const dwalletReady = protocolOnChainReady;
 
-    return applyStickyChainReadiness({
+    const readiness = applyStickyChainReadiness({
       dkgChunksReady,
       dkgChunkCount,
       encryptionKeyState,
@@ -270,6 +280,8 @@ export async function probeIkaChainReadiness(
       dwalletReady,
       readinessHint,
     });
+    storeCachedIkaReadiness(cacheKey, readiness);
+    return readiness;
   } catch {
     const cached = cachedChainReadiness;
     if (

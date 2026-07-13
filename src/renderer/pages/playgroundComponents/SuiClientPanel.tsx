@@ -145,19 +145,23 @@ export function SuiClientPanel({
     Boolean(localStatus?.managed);
 
   useEffect(() => {
-    const pollMs = isBootstrapping ? 400 : 2000;
-    const timer = window.setInterval(() => {
+    const isWindows = window.electronAPI?.platform === "win32";
+    const pollMs = isBootstrapping
+      ? isWindows
+        ? 2_500
+        : 800
+      : isWindows
+        ? 5_000
+        : 2_000;
+
+    const poll = () => {
+      if (document.visibilityState === "hidden") return;
       if (isIka) {
-        Promise.all([
-          window.playground.getIkaLocalnetStackStatus(),
-          window.playground.getLocalnetResumeStatus(),
-        ])
-          .then(([nextStack, resume]) => {
+        window.playground
+          .getIkaLocalnetStackStatus()
+          .then((nextStack) => {
             setStack(nextStack);
-            setResumeStatus(resume);
             setLocalStatus(nextStack.sui);
-            setLiveSuiLogs(nextStack.sui.recentLogs ?? []);
-            setLiveIkaLogs(nextStack.ika.recentLogs ?? []);
           })
           .catch(() => undefined);
       } else {
@@ -165,11 +169,13 @@ export function SuiClientPanel({
           .getLocalNetworkStatus()
           .then((next) => {
             setLocalStatus(next);
-            setLiveSuiLogs(next.recentLogs ?? []);
           })
           .catch(() => undefined);
       }
-    }, pollMs);
+    };
+
+    poll();
+    const timer = window.setInterval(poll, pollMs);
     return () => window.clearInterval(timer);
   }, [isBootstrapping, isIka]);
 

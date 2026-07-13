@@ -7,7 +7,8 @@ import {
   formatElevatedKillHint,
   getProcessOwner,
   killPid,
-  pgrepByPattern,
+  invalidateWindowsProcessCache,
+  pgrepByPatterns,
 } from "../platform-process";
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
@@ -17,6 +18,11 @@ import {
   getLocalnetSessionPath,
   withBelugaTmpEnv,
 } from "../beluga-toolchain-path";
+import {
+  invalidateLocalNetworkStatusCache,
+  readCachedLocalNetworkStatus,
+  storeCachedLocalNetworkStatus,
+} from "../localnet-status-cache";
 import { spawnWithLineBufferedLogs } from "../localnet-process";
 import { getManagedSuiBinary, toolchainEnv } from "../sui-toolchain";
 import {
@@ -75,15 +81,13 @@ function formatUnkillableSuiHint(
 
 async function killSuiLocalnetProcesses(): Promise<KillSuiProcessesResult> {
   const targetPids = new Set<number>();
-  for (const pattern of [
+  for (const pid of await pgrepByPatterns([
     "sui(\\.exe)? start",
     "sui-node(\\.exe)?",
     "sui-faucet(\\.exe)?",
     "sui(\\.exe)? faucet",
-  ]) {
-    for (const pid of await pgrepByPattern(pattern)) {
-      targetPids.add(pid);
-    }
+  ])) {
+    targetPids.add(pid);
   }
   for (const port of [9000, 9123]) {
     for (const pid of await findListenerPidsOnPort(port)) {
@@ -104,6 +108,7 @@ async function killSuiLocalnetProcesses(): Promise<KillSuiProcessesResult> {
   }
 
   if (killed.length > 0) {
+    invalidateWindowsProcessCache();
     await sleep(750);
   }
 
@@ -494,7 +499,14 @@ export function getLocalNetworkStatus(): LocalNetworkStatus {
   return buildLocalNetworkStatus();
 }
 
-export async function refreshLocalNetworkStatus(): Promise<LocalNetworkStatus> {
+export async function refreshLocalNetworkStatus(options?: {
+  force?: boolean;
+}): Promise<LocalNetworkStatus> {
+  if (!options?.force) {
+    const cached = readCachedLocalNetworkStatus();
+    if (cached) return cached;
+  }
+
   suiLocalnetRuntime.lastKnownRpcReady = await probeLocalRpcReady();
   if (!suiLocalnetRuntime.lastKnownRpcReady && suiLocalnetRuntime.localNetworkProcess?.killed) {
     suiLocalnetRuntime.localNetworkProcess = null;
@@ -503,14 +515,17 @@ export async function refreshLocalNetworkStatus(): Promise<LocalNetworkStatus> {
   if (suiLocalnetRuntime.lastKnownRpcReady && !suiLocalnetRuntime.localNetworkProcess) {
     warnUnmanagedSuiLogsOnce();
   }
-  return buildLocalNetworkStatus({
+  const status = buildLocalNetworkStatus({
     persistedGenesisReady: await hasBelugaPersistedSuiGenesis(),
   });
+  storeCachedLocalNetworkStatus(status);
+  return status;
 }
 
 export async function startLocalNetwork(
   options: StartLocalNetworkOptions = {},
 ): Promise<LocalNetworkStatus> {
+  invalidateLocalNetworkStatusCache();
   await ensureBelugaToolchainWritable();
 
   if (suiLocalnetRuntime.localNetworkProcess && !suiLocalnetRuntime.localNetworkProcess.killed) {
@@ -657,6 +672,7 @@ async function finishLocalNetworkStart(
 }
 
 export async function forceStopLocalNetwork(): Promise<LocalNetworkStatus> {
+  invalidateLocalNetworkStatusCache();
   await stopLocalNetwork();
 
   const started = Date.now();
@@ -676,7 +692,7 @@ export async function forceStopLocalNetwork(): Promise<LocalNetworkStatus> {
     if (result.unkillable.length > 0) {
       break;
     }
-    await sleep(500);
+    await sleep(process.platform === "win32" ? 2_000 : 500);
   }
 
   suiLocalnetRuntime.lastKnownRpcReady = await probeLocalRpcReady();
@@ -692,6 +708,7 @@ export async function forceStopLocalNetwork(): Promise<LocalNetworkStatus> {
 }
 
 export async function stopLocalNetwork(): Promise<LocalNetworkStatus> {
+  invalidateLocalNetworkStatusCache();
   await stopSupplementalFaucet();
 
   if (suiLocalnetRuntime.localNetworkProcess && !suiLocalnetRuntime.localNetworkProcess.killed) {

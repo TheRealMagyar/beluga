@@ -3,7 +3,11 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { toolchainEnv } from "./sui-toolchain";
+import {
+  getManagedSuiBinary,
+  toolchainEnv,
+  warmToolchainBinaries,
+} from "./sui-toolchain";
 import {
   ensureLocalEnvironment,
   ensureTestnetEnvironment,
@@ -34,10 +38,6 @@ export interface PlaygroundCliStatus {
   path: string | null;
 }
 
-function resolveSuiBinary(): string {
-  return process.env.SUI_BIN || "sui";
-}
-
 export async function getPlaygroundWorkspace(): Promise<string> {
   const dir = path.join(app.getPath("userData"), "playground", "workspace");
   await fs.mkdir(dir, { recursive: true });
@@ -45,15 +45,17 @@ export async function getPlaygroundWorkspace(): Promise<string> {
 }
 
 export async function checkSuiCli(): Promise<PlaygroundCliStatus> {
-  const binary = resolveSuiBinary();
+  await warmToolchainBinaries();
+  const binary = await getManagedSuiBinary();
   try {
     const { stdout } = await execFileAsync(binary, ["--version"], {
       timeout: 10_000,
       env: toolchainEnv(),
     });
+    const versionLine = stdout.trim().split("\n")[0];
     return {
       installed: true,
-      version: stdout.trim(),
+      version: versionLine,
       path: binary,
     };
   } catch {
@@ -202,7 +204,7 @@ export async function buildPlaygroundPackage(
   }
 
   const workspace = await syncPlaygroundFiles(files);
-  const binary = resolveSuiBinary();
+  const binary = await getManagedSuiBinary();
   const { buildEnv, useBuildEnvFlag } = await prepareBuildEnvironment(cli.version);
 
   try {
@@ -273,6 +275,7 @@ export async function runPlaygroundShellCommand(command: string): Promise<{
   }
 
   const workspace = await getPlaygroundWorkspace();
+  await warmToolchainBinaries();
   const shell =
     process.platform === "win32"
       ? process.env.ComSpec || "cmd.exe"
@@ -280,7 +283,7 @@ export async function runPlaygroundShellCommand(command: string): Promise<{
   const args =
     process.platform === "win32"
       ? ["/d", "/s", "/c", trimmed]
-      : ["-lc", trimmed];
+      : ["-c", trimmed];
 
   try {
     const { stdout, stderr } = await execFileAsync(shell, args, {

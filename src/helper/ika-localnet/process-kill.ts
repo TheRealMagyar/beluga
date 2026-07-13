@@ -6,8 +6,8 @@ import {
   killProcessTree,
   killProcessTreeSync,
   pathRegexFragment,
-  pgrepByPattern,
-  pgrepByPatternSync,
+  pgrepByPatterns,
+  pgrepByPatternsSync,
 } from "../platform-process";
 import { getIkaRepoPath, getLegacyIkaRepoPath } from "./paths";
 
@@ -84,11 +84,9 @@ export async function findOrphanedIkaStartPids(
 ): Promise<number[]> {
   const found = new Set<number>();
 
-  for (const pattern of buildIkaPgrepPatterns(repoPath)) {
-    for (const pid of await pgrepByPattern(pattern)) {
-      if (excludePid != null && pid === excludePid) continue;
-      found.add(pid);
-    }
+  for (const pid of await pgrepByPatterns(buildIkaPgrepPatterns(repoPath))) {
+    if (excludePid != null && pid === excludePid) continue;
+    found.add(pid);
   }
 
   return [...found];
@@ -100,11 +98,9 @@ export function findOrphanedIkaStartPidsSync(
 ): number[] {
   const found = new Set<number>();
 
-  for (const pattern of buildIkaPgrepPatterns(repoPath)) {
-    for (const pid of pgrepByPatternSync(pattern)) {
-      if (excludePid != null && pid === excludePid) continue;
-      found.add(pid);
-    }
+  for (const pid of pgrepByPatternsSync(buildIkaPgrepPatterns(repoPath))) {
+    if (excludePid != null && pid === excludePid) continue;
+    found.add(pid);
   }
 
   return [...found];

@@ -155,7 +155,14 @@ export function IkaPlayground() {
         "Ika Playground ready. Start Sui + Ika localnet to create dWallets.",
       );
     }
-    const timer = window.setInterval(refreshStatus, 3000);
+    const pollMs =
+      window.electronAPI?.platform === "win32" ? 5_000 : 3_000;
+    const poll = () => {
+      if (document.visibilityState === "hidden") return;
+      void refreshStatus();
+    };
+    poll();
+    const timer = window.setInterval(poll, pollMs);
     return () => window.clearInterval(timer);
   }, [refreshStatus, addLog]);
 

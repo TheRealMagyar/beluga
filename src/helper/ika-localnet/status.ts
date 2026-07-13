@@ -1,3 +1,9 @@
+import {
+  invalidateIkaLocalnetStatusCache,
+  readCachedIkaLocalnetStatus,
+  readCachedLocalNetworkStatus,
+  storeCachedIkaLocalnetStatus,
+} from "../localnet-status-cache";
 import { refreshLocalNetworkStatus } from "../sui-client-manager";
 import { getIkaLocalnetConfig, repoIsReady } from "./config";
 import { getIkaLocalnetLogMessages, isNetworkDkgReadyFromLogs } from "./logs";
@@ -12,15 +18,29 @@ import {ikaLocalnetRuntime} from "./runtime";
 import { clearLocalnetSession } from "./session";
 import type { IkaLocalnetStatus } from "./types";
 
-export async function getIkaLocalnetStatus(): Promise<IkaLocalnetStatus> {
+export async function getIkaLocalnetStatus(options?: {
+  force?: boolean;
+}): Promise<IkaLocalnetStatus> {
+  if (!options?.force) {
+    const cached = readCachedIkaLocalnetStatus();
+    if (cached) return cached;
+  }
+
   const repoPath = getIkaRepoPath();
   const config = await getIkaLocalnetConfig();
   const recentLogs = getIkaLocalnetLogMessages();
   const resume = await getLocalnetResumeStatus();
   const trackedRunning = ikaLocalnetRuntime.ikaProcess != null && !ikaLocalnetRuntime.ikaProcess.killed;
-  const orphanPids = trackedRunning
-    ? []
-    : await findOrphanedIkaStartPids(repoPath);
+  const networkHint = readCachedLocalNetworkStatus();
+  const skipOrphanScan =
+    process.platform === "win32" &&
+    !trackedRunning &&
+    networkHint != null &&
+    !networkHint.rpcReady;
+  const orphanPids =
+    trackedRunning || skipOrphanScan
+      ? []
+      : await findOrphanedIkaStartPids(repoPath);
   const running = trackedRunning || orphanPids.length > 0;
   const stateOutOfSync =
     config.ready &&
@@ -61,7 +81,7 @@ export async function getIkaLocalnetStatus(): Promise<IkaLocalnetStatus> {
     void clearLocalnetSession();
   }
 
-  return {
+  const status: IkaLocalnetStatus = {
     running,
     configReady: config.ready,
     networkDkgReady,
@@ -79,4 +99,10 @@ export async function getIkaLocalnetStatus(): Promise<IkaLocalnetStatus> {
     startedAt: ikaLocalnetRuntime.ikaStartedAt,
     recentLogs,
   };
+  storeCachedIkaLocalnetStatus(status);
+  return status;
+}
+
+export function bumpIkaLocalnetStatusCache() {
+  invalidateIkaLocalnetStatusCache();
 }
