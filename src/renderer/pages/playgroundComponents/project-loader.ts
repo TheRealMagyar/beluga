@@ -106,7 +106,7 @@ async function pathIsFile(filePath: string): Promise<boolean> {
   const fs = getFs();
   try {
     const stat = await fs.stat(filePath);
-    return !stat.isDirectory;
+    return stat != null && !stat.isDirectory;
   } catch {
     return false;
   }
@@ -125,7 +125,7 @@ export async function findMovePackageRoot(
       const subPath = await fs.pathJoin(projectPath, entry);
       try {
         const stat = await fs.stat(subPath);
-        if (stat.isDirectory) candidates.push(subPath);
+        if (stat?.isDirectory) candidates.push(subPath);
       } catch {
         // skip unreadable entries
       }
@@ -220,6 +220,7 @@ async function collectSourceFiles(
   for (const entry of entries) {
     const entryPath = await fs.pathJoin(dirPath, entry);
     const stat = await fs.stat(entryPath);
+    if (!stat) continue;
     const relativePath = `${relativePrefix}/${entry}`;
 
     if (stat.isDirectory) {
@@ -331,7 +332,7 @@ export async function loadProjectIntoPlayground(
   const sourcesPath = await fs.pathJoin(packageRoot, "sources");
   try {
     const sourcesStat = await fs.stat(sourcesPath);
-    if (sourcesStat.isDirectory) {
+    if (sourcesStat?.isDirectory) {
       rawFiles.push(...(await collectSourceFiles(sourcesPath, "sources")));
     }
   } catch {

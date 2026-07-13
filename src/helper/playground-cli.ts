@@ -5,7 +5,10 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { toolchainEnv } from "./sui-toolchain";
 import {
+  ensureLocalEnvironment,
+  ensureTestnetEnvironment,
   getSuiClientStatus,
+  initSuiClient,
   refreshLocalNetworkStatus,
   switchSuiEnvironment,
 } from "./sui-client-manager";
@@ -136,7 +139,7 @@ async function prepareBuildEnvironment(version: string | null): Promise<{
 }> {
   const useBuildEnvFlag = supportsBuildEnvFlag(version);
   const local = await refreshLocalNetworkStatus();
-  const status = await getSuiClientStatus();
+  let status = await getSuiClientStatus();
   const buildEnv = resolveChainBuildEnv(status.activeEnv, local.rpcReady);
 
   if (useBuildEnvFlag) {
@@ -144,22 +147,27 @@ async function prepareBuildEnvironment(version: string | null): Promise<{
   }
 
   if (!status.configured) {
-    throw new Error(
-      "Sui client is not configured. Initialize it from Playground → CLI panel.",
-    );
+    await initSuiClient();
+    status = await getSuiClientStatus();
   }
 
-  const targetAlias = local.rpcReady
-    ? await findEnvironmentAlias(status, "testnet")
-    : status.activeEnv;
-
-  if (!targetAlias) {
-    throw new Error(
-      "No Sui client environment available for build. Add testnet in Playground → CLI panel.",
-    );
+  if (local.rpcReady) {
+    await ensureLocalEnvironment();
+    status = await getSuiClientStatus();
+    const localAlias =
+      status.environments.find((env) =>
+        ["local", "localnet"].includes(env.alias.toLowerCase()),
+      )?.alias ??
+      (await findEnvironmentAlias(status, "local")) ??
+      (await findEnvironmentAlias(status, "testnet"));
+    if (localAlias) {
+      await switchSuiEnvironment(localAlias);
+      return { buildEnv, useBuildEnvFlag };
+    }
   }
 
-  await switchSuiEnvironment(targetAlias);
+  const testnet = await ensureTestnetEnvironment();
+  await switchSuiEnvironment(testnet.alias);
   return { buildEnv, useBuildEnvFlag };
 }
 

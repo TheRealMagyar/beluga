@@ -9,6 +9,7 @@ import type { SuiClientStatus } from "./types";
 const execFileAsync = promisify(execFile);
 
 export const DEFAULT_RPC_URL = "http://127.0.0.1:9000";
+export const DEFAULT_TESTNET_RPC = "https://fullnode.testnet.sui.io:443";
 const LOCAL_ENV_ALIASES = ["local", "localnet"];
 
 function resolveSuiBinary() {
@@ -80,6 +81,45 @@ export async function initSuiClient(): Promise<{ message: string }> {
 export async function switchSuiEnvironment(alias: string): Promise<{ message: string }> {
   await runSui(["client", "switch", "--env", alias]);
   return { message: `Switched to ${alias}.` };
+}
+
+export async function ensureTestnetEnvironment(
+  rpcUrl = DEFAULT_TESTNET_RPC,
+): Promise<{ message: string; created: boolean; alias: string }> {
+  let status = await getSuiClientStatus();
+  if (!status.configured) {
+    await initSuiClient();
+    status = await getSuiClientStatus();
+  }
+
+  const existing = status.environments.find(
+    (env) =>
+      env.alias.toLowerCase().includes("testnet") ||
+      env.rpc.toLowerCase().includes("testnet"),
+  );
+
+  if (existing) {
+    return {
+      message: `Testnet environment already configured (${existing.alias}).`,
+      created: false,
+      alias: existing.alias,
+    };
+  }
+
+  await runSui([
+    "client",
+    "new-env",
+    "--alias",
+    "testnet",
+    "--rpc",
+    rpcUrl,
+  ]);
+
+  return {
+    message: `Created testnet environment (${rpcUrl}).`,
+    created: true,
+    alias: "testnet",
+  };
 }
 
 export async function ensureLocalEnvironment(

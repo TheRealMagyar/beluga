@@ -32,6 +32,7 @@ async function collectFilesRecursively(
     }
     const entryPath = await fs.pathJoin(dirPath, entry);
     const stat = await fs.stat(entryPath);
+    if (!stat) continue;
     if (stat.isDirectory) {
       const nested = await collectFilesRecursively(fs, entryPath);
       files.push(...nested);
@@ -61,7 +62,7 @@ export async function loadProjects(): Promise<Project[]> {
   for (const dir of dirs) {
     const dirPath = await fs.pathJoin(projectsDir, dir);
     const dirStat = await fs.stat(dirPath);
-    if (!dirStat.isDirectory) continue;
+    if (!dirStat?.isDirectory) continue;
 
     const files = await collectFilesRecursively(fs, dirPath);
 

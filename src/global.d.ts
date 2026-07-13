@@ -41,7 +41,7 @@ interface Window {
     // ── Project Manager (filesystem) ──
     getAppPath: () => Promise<string>;
     readdir: (path: string) => Promise<string[]>;
-    stat: (path: string) => Promise<{ size: number; mtime: string; isDirectory: boolean }>;
+    stat: (path: string) => Promise<{ size: number; mtime: string; isDirectory: boolean } | null>;
     mkdir: (path: string) => Promise<void>;
     writeFile: (path: string, content: string) => Promise<void>;
     readFile: (path: string) => Promise<string>;

@@ -2,6 +2,7 @@ export {
   appendLocalNetworkLog,
   cleanupLocalNetwork,
   ensureLocalEnvironment,
+  ensureTestnetEnvironment,
   fetchLocalAddressOverview,
   fetchLocalCheckpoints,
   fetchLocalNetworkOverview,

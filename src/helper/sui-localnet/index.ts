@@ -22,6 +22,7 @@ export type {
 
 export {
   ensureLocalEnvironment,
+  ensureTestnetEnvironment,
   getSuiClientStatus,
   initSuiClient,
   switchSuiEnvironment,

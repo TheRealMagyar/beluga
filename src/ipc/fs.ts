@@ -11,12 +11,24 @@ export function registerFsIpc(ctx: MainIpcContext) {
   });
 
   ipcMain.handle("fs:stat", async (_, targetPath: string) => {
-    const s = await fsPromises.stat(targetPath);
-    return {
-      size: s.size,
-      mtime: s.mtime.toISOString(),
-      isDirectory: s.isDirectory(),
-    };
+    try {
+      const s = await fsPromises.stat(targetPath);
+      return {
+        size: s.size,
+        mtime: s.mtime.toISOString(),
+        isDirectory: s.isDirectory(),
+      };
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        err.code === "ENOENT"
+      ) {
+        return null;
+      }
+      throw err;
+    }
   });
 
   ipcMain.handle("fs:mkdir", async (_, dirPath: string) => {
