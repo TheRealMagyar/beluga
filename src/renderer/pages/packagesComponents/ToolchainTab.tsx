@@ -309,7 +309,7 @@ const IKA_STEPS = [
     title: "Ika CLI binary",
     description:
       typeof navigator !== "undefined" && /Win/i.test(navigator.userAgent)
-        ? "Release build of ika.exe (cargo). First build downloads MystenLabs/sui — often 30–60 min on Windows; requires Visual Studio C++ Build Tools."
+        ? "Release build of ika.exe (cargo). Beluga auto-installs C++ Build Tools and LLVM on first run; compiling may take 30–60 min."
         : "Release build of the ika binary (cargo build). First build may take 10+ minutes.",
     installKey: "ika-binary",
     installLabel: "Build Ika CLI",

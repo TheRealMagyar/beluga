@@ -8,6 +8,11 @@ const execFileAsync = promisify(execFile);
 export const MSVC_REQUIRED_MESSAGE =
   'Microsoft C++ Build Tools are required to compile Ika on Windows. Install "Desktop development with C++" from Visual Studio Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/), then restart Beluga and rebuild.';
 
+export const LIBCLANG_REQUIRED_MESSAGE =
+  "LLVM libclang is required for Ika on Windows (librocksdb-sys uses bindgen). " +
+  'Install LLVM (https://releases.llvm.org/download.html) or run: winget install LLVM.LLVM — ' +
+  'or add "C++ Clang tools for Windows" in Visual Studio Installer. Then restart Beluga and rebuild.';
+
 export interface WindowsMsvcLaunch {
   installationPath: string;
   vcvars64: string;
@@ -96,6 +101,96 @@ function quoteCmdToken(token: string): string {
   return `"${token.replace(/"/g, '""')}"`;
 }
 
+function libClangDllExists(dir: string): boolean {
+  return (
+    pathExistsSync(path.join(dir, "libclang.dll")) ||
+    pathExistsSync(path.join(dir, "clang.dll"))
+  );
+}
+
+function findLibClangDir(candidates: string[]): string | null {
+  for (const dir of candidates) {
+    if (libClangDllExists(dir)) return dir;
+  }
+  return null;
+}
+
+async function collectLibClangCandidates(): Promise<string[]> {
+  const candidates: string[] = [];
+  const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+  const programFilesX86 =
+    process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+
+  candidates.push(
+    path.join(programFiles, "LLVM", "bin"),
+    path.join(programFilesX86, "LLVM", "bin"),
+  );
+
+  const appendVsLlvmDirs = (installationPath: string) => {
+    candidates.push(
+      path.join(installationPath, "VC", "Tools", "Llvm", "x64", "bin"),
+      path.join(installationPath, "VC", "Tools", "Llvm", "bin"),
+    );
+  };
+
+  const vsPath = await findVcToolsInstallationPath();
+  if (vsPath) appendVsLlvmDirs(vsPath);
+
+  const vswhere = getVswherePath();
+  if (vswhere) {
+    const llvmVsPath = await queryVswhere(vswhere, [
+      "-latest",
+      "-products",
+      "*",
+      "-requires",
+      "Microsoft.VisualStudio.Component.VC.Llvm.x86_x64",
+      "-property",
+      "installationPath",
+    ]);
+    if (llvmVsPath) appendVsLlvmDirs(llvmVsPath);
+  }
+
+  return candidates;
+}
+
+export async function findWindowsLibClangDir(
+  env?: NodeJS.ProcessEnv,
+): Promise<string | null> {
+  if (process.platform !== "win32") return null;
+
+  const existing = env?.LIBCLANG_PATH?.trim();
+  if (existing && libClangDllExists(existing)) {
+    return existing;
+  }
+
+  return findLibClangDir(await collectLibClangCandidates());
+}
+
+export async function resolveWindowsLibClangDir(
+  env?: NodeJS.ProcessEnv,
+): Promise<string> {
+  const libClangDir = await findWindowsLibClangDir(env);
+  if (!libClangDir) {
+    throw new Error(LIBCLANG_REQUIRED_MESSAGE);
+  }
+  return libClangDir;
+}
+
+export async function applyWindowsCargoBuildEnv(
+  baseEnv: NodeJS.ProcessEnv,
+): Promise<NodeJS.ProcessEnv> {
+  if (process.platform !== "win32") return baseEnv;
+
+  const libClangDir = await findWindowsLibClangDir(baseEnv);
+  if (!libClangDir) {
+    throw new Error(LIBCLANG_REQUIRED_MESSAGE);
+  }
+  return {
+    ...baseEnv,
+    LIBCLANG_PATH: libClangDir,
+  };
+}
+
 export async function linkExeAvailable(env?: NodeJS.ProcessEnv): Promise<boolean> {
   if (process.platform !== "win32") return true;
   try {
@@ -109,6 +204,24 @@ export async function linkExeAvailable(env?: NodeJS.ProcessEnv): Promise<boolean
   }
 }
 
+export async function findWindowsMsvcLaunch(): Promise<WindowsMsvcLaunch | null> {
+  if (process.platform !== "win32") return null;
+
+  const installationPath = await findVcToolsInstallationPath();
+  if (!installationPath) return null;
+
+  const vcvars64 = path.join(
+    installationPath,
+    "VC",
+    "Auxiliary",
+    "Build",
+    "vcvars64.bat",
+  );
+  if (!pathExistsSync(vcvars64)) return null;
+
+  return { installationPath, vcvars64 };
+}
+
 export async function resolveWindowsMsvcForCargo(
   env?: NodeJS.ProcessEnv,
 ): Promise<WindowsMsvcLaunch | null> {
@@ -118,23 +231,11 @@ export async function resolveWindowsMsvcForCargo(
     return null;
   }
 
-  const installationPath = await findVcToolsInstallationPath();
-  if (!installationPath) {
+  const launch = await findWindowsMsvcLaunch();
+  if (!launch) {
     throw new Error(MSVC_REQUIRED_MESSAGE);
   }
-
-  const vcvars64 = path.join(
-    installationPath,
-    "VC",
-    "Auxiliary",
-    "Build",
-    "vcvars64.bat",
-  );
-  if (!pathExistsSync(vcvars64)) {
-    throw new Error(MSVC_REQUIRED_MESSAGE);
-  }
-
-  return { installationPath, vcvars64 };
+  return launch;
 }
 
 export function buildWindowsCargoCommand(

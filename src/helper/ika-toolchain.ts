@@ -30,9 +30,12 @@ import {
   getIkaVendorRoot,
   getIkaWasmWebDir,
 } from "./ika-vendor-path";
+import { ensureWindowsIkaBuildPrereqs } from "./windows-toolchain-install";
 import {
+  applyWindowsCargoBuildEnv,
   buildWindowsCargoCommand,
-  resolveWindowsMsvcForCargo,
+  findWindowsMsvcLaunch,
+  LIBCLANG_REQUIRED_MESSAGE,
 } from "./windows-msvc";
 
 const execFileAsync = promisify(execFile);
@@ -192,22 +195,30 @@ function assertSpaceFreeToolchainPath(repoPath: string) {
   }
 }
 
-function ikaCargoBuildEnv(): NodeJS.ProcessEnv {
-  return {
+async function ikaCargoBuildEnv(): Promise<NodeJS.ProcessEnv> {
+  const base: NodeJS.ProcessEnv = {
     ...toolchainEnv(),
     CARGO_TERM_PROGRESS_WHEN: "always",
     CARGO_TERM_PROGRESS_WIDTH: "80",
     GIT_TERMINAL_PROMPT: "0",
     CARGO_NET_GIT_FETCH_WITH_CLI: "true",
   };
+  return applyWindowsCargoBuildEnv(base);
+}
+
+function formatIkaCargoBuildError(message: string): string {
+  if (/Unable to find libclang|LIBCLANG_PATH/i.test(message)) {
+    return `${message}\n\n${LIBCLANG_REQUIRED_MESSAGE}`;
+  }
+  return message;
 }
 
 function ikaBinaryStartMessage(): string {
   if (process.platform === "win32") {
     return (
       "Building Ika CLI (cargo build --release). " +
-      "First run downloads MystenLabs/sui and other git deps — often 30–60 minutes on Windows. " +
-      "Fetch/Checkout lines in the log are normal; keep Beluga open until Finished release."
+      "Beluga installs missing C++ Build Tools and LLVM automatically on first run. " +
+      "Compiling downloads MystenLabs/sui — often 30–60 minutes; keep Beluga open until Finished release."
     );
   }
   return (
@@ -364,11 +375,25 @@ export async function buildIkaBinary(
   }
 
     await assertRustForCargoBuild();
+
+    if (process.platform === "win32") {
+      await ensureWindowsIkaBuildPrereqs((message) => {
+        emit?.({
+          job: "ika-binary",
+          phase: "running",
+          percent: null,
+          message,
+          recentLogs: [message],
+        });
+      });
+    }
+
     await prepareIkaRepoForCargoBuild(repoPath);
 
-    const buildEnv = ikaCargoBuildEnv();
+    const buildEnv = await ikaCargoBuildEnv();
     const cargoArgs = ["build", "--release", "--bin", "ika", "--no-default-features"];
-    const msvcLaunch = await resolveWindowsMsvcForCargo(buildEnv);
+    const msvcLaunch =
+      process.platform === "win32" ? await findWindowsMsvcLaunch() : null;
     const cargoCommand = msvcLaunch
       ? buildWindowsCargoCommand(msvcLaunch.vcvars64, cargoArgs)
       : { command: "cargo", args: cargoArgs };
@@ -389,9 +414,10 @@ export async function buildIkaBinary(
     );
 
     if (code !== 0) {
-      const message =
+      const raw =
         [stderr, stdout].filter(Boolean).join("\n").trim() ||
         `cargo build failed with exit code ${code ?? "unknown"}.`;
+      const message = formatIkaCargoBuildError(raw);
       emitDone(emit ?? (() => undefined), "ika-binary", false, message, logs);
       return { success: false, message, stdout, stderr };
     }
