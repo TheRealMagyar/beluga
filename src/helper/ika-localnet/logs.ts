@@ -5,6 +5,7 @@ import {
   type StreamLogEntry,
 } from "../stream-log-entry";
 import {
+  IKA_FAUCET_FAILURE_HINT,
   IKA_MOVE_CACHE_HINT,
   IKA_PERMISSION_DENIED_HINT,
 } from "./constants";
@@ -54,6 +55,13 @@ export function isNetworkDkgReadyFromLogs(logs: string[]): boolean {
 
 export function detectIkaFatalStartupError(logs: string[]): string | null {
   const text = logs.join("\n");
+
+  if (
+    /Faucet request was unsuccessful/i.test(text) ||
+    /\[error\].*Faucet request/i.test(text)
+  ) {
+    return IKA_FAUCET_FAILURE_HINT;
+  }
 
   if (
     (/\.move\/git|Error while loading dependency|acquiring lock/i.test(text) &&

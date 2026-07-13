@@ -1,9 +1,54 @@
 import {
+  FaucetRateLimitError,
   getFaucetHost,
   requestSuiFromFaucetV2,
 } from "@mysten/sui/faucet";
 
 export type FaucetNetwork = "testnet" | "devnet" | "localnet";
+
+const FAUCET_PROBE_ADDRESS =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+/** True when the local Sui faucet HTTP service accepts fund requests. */
+export async function probeLocalFaucetReady(
+  host = "http://127.0.0.1:9123",
+): Promise<boolean> {
+  try {
+    const response = await fetch(new URL("/v2/gas", host).toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        FixedAmountRequest: {
+          recipient: FAUCET_PROBE_ADDRESS,
+        },
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    if (response.status === 429) {
+      return true;
+    }
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = (await response.json()) as {
+      status?: string | { Failure?: { internal?: string } };
+    };
+
+    if (payload.status === "Success") {
+      return true;
+    }
+
+    return typeof payload.status === "object" && payload.status != null;
+  } catch (err) {
+    if (err instanceof FaucetRateLimitError) {
+      return true;
+    }
+    return false;
+  }
+}
 
 export async function requestFaucetCoins(
   network: FaucetNetwork,

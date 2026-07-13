@@ -12,8 +12,13 @@ import {
 import { broadcastLocalnetLogs } from "../localnet-log-broadcast";
 import { spawnWithLineBufferedLogs } from "../localnet-process";
 import { refreshLocalNetworkStatus } from "../sui-client-manager";
+import { waitForLocalFaucetReady } from "../sui-localnet/network";
 import { getToolchainStatus, toolchainEnv } from "../sui-toolchain";
-import { IKA_REPO_URL, IKA_START_EPOCH_DURATION_MS } from "./constants";
+import {
+  IKA_FAUCET_FAILURE_HINT,
+  IKA_REPO_URL,
+  IKA_START_EPOCH_DURATION_MS,
+} from "./constants";
 import { repoIsReady, waitForIkaConfig } from "./config";
 import {
   detectIkaFatalStartupError,
@@ -216,6 +221,13 @@ export async function startIkaLocalnet(
   pushIkaLog(`Using Ika network config at ${ikaConfigDir} (toolchain: ${toolchainRoot}).`);
   pushIkaLog(`Using writable temp dir ${belugaTmpDir} for Ika RocksDB.`);
   pushIkaLog(`Using Move cache at ${moveHome} (MOVE_HOME).`);
+
+  pushIkaLog("Waiting for Sui faucet to accept fund requests…");
+  const faucetReady = await waitForLocalFaucetReady(90_000);
+  if (!faucetReady) {
+    throw new Error(IKA_FAUCET_FAILURE_HINT);
+  }
+  pushIkaLog("Sui faucet is ready.");
 
   const spawnEnv: NodeJS.ProcessEnv = {
     ...withBelugaTmpEnv(toolchainEnv(), belugaTmpDir),

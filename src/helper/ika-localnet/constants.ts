@@ -28,3 +28,9 @@ export const IKA_MOVE_CACHE_HINT =
   "This usually means ~/.move has root-owned folders from running with sudo. " +
   "Run in Terminal:\n\nnpm run fix-permissions\n\n" +
   "Then restart Beluga without sudo and press Start again.";
+
+export const IKA_FAUCET_FAILURE_HINT =
+  "Ika could not fund its publisher address from the Sui localnet faucet. " +
+  "Ika needs the faucet on http://127.0.0.1:9123 when bootstrapping contracts.\n\n" +
+  "Try: Stop the localnet, press Reset in the Ika CLI panel, then Start again. " +
+  "If Sui was started outside Beluga without --with-faucet, stop it and let Beluga start Sui.";

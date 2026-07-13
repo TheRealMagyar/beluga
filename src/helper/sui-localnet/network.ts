@@ -24,6 +24,7 @@ import {
   ensureLocalEnvironment,
   switchSuiEnvironment,
 } from "./client";
+import { probeLocalFaucetReady } from "../sui-faucet";
 import { describeLocalnetStartupFailure } from "./config-repair";
 import {
   ensureBelugaPersistedSuiGenesis,
@@ -137,6 +138,44 @@ export async function probeLocalRpcReady(
   } catch {
     return false;
   }
+}
+
+export async function waitForLocalFaucetReady(
+  timeoutMs: number,
+  faucetUrl = DEFAULT_FAUCET_URL,
+): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (await probeLocalFaucetReady(faucetUrl)) {
+      return true;
+    }
+    const proc = suiLocalnetRuntime.localNetworkProcess;
+    if (proc?.killed) {
+      return false;
+    }
+    if (
+      suiLocalnetRuntime.localNetworkStartedAt &&
+      !proc &&
+      Date.now() - suiLocalnetRuntime.localNetworkStartedAt > 1_500
+    ) {
+      return false;
+    }
+    await sleep(1_000);
+  }
+  return false;
+}
+
+function describeLocalFaucetStartupFailure(logs: string[]): string {
+  const knownFailure = describeLocalnetStartupFailure(logs);
+  if (knownFailure) {
+    return knownFailure;
+  }
+  return (
+    "Sui localnet faucet did not become ready on http://127.0.0.1:9123. " +
+    "Ika needs the faucet to fund its publisher address during bootstrap.\n\n" +
+    "Press Reset in the Ika CLI panel, then Start again. " +
+    "If another Sui process is using port 9000 without a faucet, stop it first."
+  );
 }
 
 async function waitForLocalRpcReady(timeoutMs: number): Promise<boolean> {
@@ -374,6 +413,21 @@ export async function startLocalNetwork(
           ? `Sui localnet did not become ready within 2 minutes.\n\nRecent logs:\n${recent}`
           : "Sui localnet did not become ready within 2 minutes."),
     );
+  }
+
+  if (options.withFaucet !== false) {
+    pushLog("Waiting for Sui faucet on port 9123…");
+    const faucetReady = await waitForLocalFaucetReady(90_000);
+    if (!faucetReady) {
+      const recentLogs = getSuiLocalnetLogMessages();
+      const recent = recentLogs.slice(-12).join("\n");
+      const message = describeLocalFaucetStartupFailure(recentLogs);
+      await stopLocalNetwork();
+      throw new Error(
+        recent ? `${message}\n\nRecent logs:\n${recent}` : message,
+      );
+    }
+    pushLog("Sui faucet is ready.");
   }
 
   return finishLocalNetworkStart(options, chainReset);

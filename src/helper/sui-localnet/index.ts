@@ -48,6 +48,7 @@ export {
   requestLocalFaucet,
   startLocalNetwork,
   stopLocalNetwork,
+  waitForLocalFaucetReady,
 } from "./network";
 
 export {

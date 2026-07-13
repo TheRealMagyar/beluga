@@ -27,6 +27,7 @@ export {
   startLocalNetwork,
   stopLocalNetwork,
   switchSuiEnvironment,
+  waitForLocalFaucetReady,
 } from "./sui-localnet";
 
 export type {
