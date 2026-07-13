@@ -6,6 +6,7 @@ import cogwheelSvg from './assets/cogwheel.svg'
 import walletSvg from './assets/wallet.svg'
 import applicationSvg from './assets/application.svg'
 import linkSvg from './assets/link.svg'
+import githubSvg from './assets/github.svg'
 import walrusPng from './assets/walrus.png'
 import folderSvg from './assets/folder.svg'
 import pencilSvg from './assets/pencil.svg'
@@ -77,7 +78,7 @@ export const CONFIG = {
       {
         id: "github",
         label: "GitHub",
-        icon: linkSvg,
+        icon: githubSvg,
       },
       {
         id: "walrus",
