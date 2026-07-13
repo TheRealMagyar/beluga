@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { getNodeInstallPaths } from "./command-binary";
 import {
   getBelugaMoveHomeDir,
   getBelugaToolchainRoot,
@@ -61,10 +62,9 @@ export function augmentedPath() {
           cargoBin,
           ...(cargoBin !== defaultCargoBin ? [defaultCargoBin] : []),
           path.join(home, ".local", "bin"),
-          "/opt/homebrew/bin",
-          "/usr/local/bin",
+          ...getNodeInstallPaths(),
         ];
-  return [...extra, process.env.PATH ?? ""]
+  return [...extra, ...getNodeInstallPaths(), process.env.PATH ?? ""]
     .filter(Boolean)
     .join(path.delimiter);
 }
@@ -296,7 +296,8 @@ async function runPowerShell(
 }
 
 async function installRustWindows(): Promise<InstallResult> {
-  const installer = path.join(os.tmpdir(), "beluga-rustup-init.exe");
+  // rustup-init must keep this exact name — other names are treated as proxy commands.
+  const installer = path.join(os.tmpdir(), "rustup-init.exe");
   const download = await runPowerShell(
     `Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile '${installer.replace(/'/g, "''")}'`,
     "Rust toolchain download",
@@ -305,7 +306,11 @@ async function installRustWindows(): Promise<InstallResult> {
   if (!download.success) {
     return download;
   }
-  return runCommand(installer, ["-y"], "Rust toolchain");
+  return runCommand(
+    installer,
+    ["-y", "--default-toolchain", "stable"],
+    "Rust toolchain",
+  );
 }
 
 async function installSuiupWindows(): Promise<InstallResult> {
@@ -419,6 +424,10 @@ export async function uninstallRust(): Promise<InstallResult> {
 }
 
 export async function updateSuiup(): Promise<InstallResult> {
+  if (process.platform === "win32") {
+    // suiup self-update downloads a .tar.gz that is not published for Windows.
+    return installSuiupWindows();
+  }
   return runCommand("suiup", ["self", "update"], "suiup update");
 }
 
@@ -429,6 +438,13 @@ export async function uninstallSuiup(): Promise<InstallResult> {
 export async function updateSuiCli(): Promise<InstallResult> {
   const status = await getToolchainStatus();
   if (status.suiup.installed) {
+    if (!status.sui.installed) {
+      return runCommand(
+        "suiup",
+        ["install", "sui@testnet", "-y"],
+        "Sui CLI install",
+      );
+    }
     return runCommand("suiup", ["update", "sui"], "Sui CLI update");
   }
   if (process.platform === "darwin") {

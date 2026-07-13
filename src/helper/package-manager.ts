@@ -1,8 +1,7 @@
 import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { execFile, spawn } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import {
   isJobCancelled,
   JobCancelledError,
@@ -21,6 +20,7 @@ import {
   type UpdateCustomPackageInput,
 } from "./custom-package-manager";
 import type { PackageCatalogEntry } from "./package-catalog";
+import { resolveNpmBinary, runNpmCommand } from "./command-binary";
 
 export type {
   CreateCustomPackageInput,
@@ -33,8 +33,6 @@ export {
   listCustomPackages,
   updateCustomPackage,
 };
-
-const execFileAsync = promisify(execFile);
 
 export interface InstalledPackageInfo {
   id: string;
@@ -51,10 +49,6 @@ interface PackageRegistry {
 export interface NpmCliStatus {
   installed: boolean;
   version: string | null;
-}
-
-function resolveNpmBinary(): string {
-  return process.env.NPM_BIN || "npm";
 }
 
 export async function getPackagesDir(): Promise<string> {
@@ -86,11 +80,8 @@ async function writeRegistry(registry: PackageRegistry) {
 }
 
 export async function checkNpmCli(): Promise<NpmCliStatus> {
-  const binary = resolveNpmBinary();
   try {
-    const { stdout } = await execFileAsync(binary, ["--version"], {
-      timeout: 10_000,
-    });
+    const { stdout } = await runNpmCommand(["--version"], { timeout: 10_000 });
     return { installed: true, version: stdout.trim() };
   } catch {
     return { installed: false, version: null };
@@ -156,6 +147,7 @@ async function runNpmInstall(cwd: string, jobId: string, update = false) {
     const child = spawn(npm, args, {
       cwd,
       detached: useDetached,
+      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,

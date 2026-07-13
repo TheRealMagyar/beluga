@@ -23,6 +23,10 @@ import {
   migrateIkaToolchainIfNeeded,
 } from "./ika-localnet";
 import {
+  npmInstalledPackageDir,
+  runNpmCommand,
+} from "./command-binary";
+import {
   getIkaVendorRoot,
   getIkaWasmWebDir,
 } from "./ika-vendor-path";
@@ -553,7 +557,13 @@ async function extractVendorPackage(
   targetDir: string,
   emit?: ToolchainProgressEmitter,
 ): Promise<void> {
-  const tmpDir = path.join(app.getPath("temp"), "beluga-ika-vendor");
+  const safeName = packageName.replace(/[@/]/g, "-");
+  const tmpDir = path.join(
+    app.getPath("temp"),
+    "beluga-ika-vendor",
+    `${safeName}-${version}`,
+  );
+  await fs.rm(tmpDir, { recursive: true, force: true });
   await fs.mkdir(tmpDir, { recursive: true });
 
   emit?.({
@@ -564,19 +574,31 @@ async function extractVendorPackage(
     recentLogs: [],
   });
 
-  const { stdout } = await execFileAsync(
-    "npm",
-    ["pack", `${packageName}@${version}`],
+  await runNpmCommand(
+    [
+      "install",
+      `${packageName}@${version}`,
+      "--prefix",
+      tmpDir,
+      "--no-save",
+      "--no-fund",
+      "--no-audit",
+    ],
     {
-      timeout: 120_000,
       cwd: tmpDir,
+      timeout: 300_000,
       env: toolchainEnv(),
     },
   );
 
-  const tarball = stdout.trim().split("\n").pop()?.trim();
-  if (!tarball) {
-    throw new Error(`npm pack did not return a tarball for ${packageName}.`);
+  const installedDir = npmInstalledPackageDir(tmpDir, packageName);
+  try {
+    await fs.access(installedDir);
+  } catch {
+    throw new Error(
+      `npm install did not produce ${packageName} under ${installedDir}. ` +
+        "Ensure Node.js and npm are installed and available on PATH.",
+    );
   }
 
   emit?.({
@@ -584,19 +606,12 @@ async function extractVendorPackage(
     phase: "extracting",
     percent: null,
     message: `Extracting ${packageName}...`,
-    recentLogs: [tarball],
+    recentLogs: [installedDir],
   });
 
   await fs.rm(targetDir, { recursive: true, force: true });
   await fs.mkdir(path.dirname(targetDir), { recursive: true });
-  await execFileAsync("tar", ["-xzf", tarball, "-C", path.dirname(targetDir)], {
-    timeout: 60_000,
-    cwd: tmpDir,
-    env: toolchainEnv(),
-  });
-
-  const extracted = path.join(path.dirname(targetDir), "package");
-  await fs.rename(extracted, targetDir);
+  await fs.cp(installedDir, targetDir, { recursive: true });
 }
 
 export async function installIkaSdk(
