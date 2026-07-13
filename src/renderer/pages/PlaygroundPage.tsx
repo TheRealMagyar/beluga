@@ -4,7 +4,7 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import { useWallet } from "../components/Walletcontext";
 import { NetworkSwitcher } from "../components/NetworkSwitcher";
 import { DEFAULT_PLAYGROUND_FILES } from "../../helper/playground-defaults";
-import { shellCommandOutputLogLevel } from "../../helper/playground-cli";
+import { shellCommandOutputLogLevel } from "../../helper/playground-shell-output";
 import type {
   ConsoleLog,
   PlaygroundBuildResult,
