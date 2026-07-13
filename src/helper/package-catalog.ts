@@ -156,6 +156,20 @@ export const PACKAGE_CATALOG: PackageCatalogEntry[] = [
     accent: "#ff6b6b",
   },
   {
+    id: "deepbook-v3",
+    name: "DeepBook v3",
+    description:
+      "Official SDK for DeepBook limit orders, balance managers, and pool trading on Sui.",
+    category: "payments",
+    dependencies: {
+      "@mysten/deepbook-v3": "latest",
+      "@mysten/sui": "latest",
+    },
+    docsUrl: "https://docs.sui.io/onchain-finance/deepbookv3-sdk/",
+    installCommand: "npm i @mysten/deepbook-v3 @mysten/sui",
+    accent: "#34d399",
+  },
+  {
     id: "ika-sdk",
     name: "Ika SDK",
     description:

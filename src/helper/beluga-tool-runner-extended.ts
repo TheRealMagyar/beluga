@@ -41,6 +41,7 @@ import {
   getSuiLocalnetLogSnapshot,
   fetchLocalNetworkOverview,
   fetchLocalNetworkStats,
+  fetchLocalWalletAssets,
   refreshLocalNetworkStatus,
   requestLocalFaucet,
   resetMoveSuiLocalnet,
@@ -62,6 +63,10 @@ import {
 } from "./ika-localnet-stack";
 import { fetchIkaLocalnetExplorerOverview } from "./ika-explorer";
 import { getLocalnetResumeStatus } from "./ika-localnet";
+import {
+  getActivePlaygroundSigner,
+  getPlaygroundSigners,
+} from "./playground-test-wallets";
 
 import {
   connectProjectToExistingGithubRepo,
@@ -94,6 +99,8 @@ const EXTENDED_TOOL_NAMES = new Set([
   "playground_request_faucet",
   "playground_get_localnet_logs",
   "playground_get_localnet_overview",
+  "playground_list_wallets",
+  "playground_get_wallet_assets",
   "playground_start_ika_localnet",
   "playground_stop_ika_localnet",
   "playground_start_ika_stack",
@@ -104,6 +111,21 @@ const EXTENDED_TOOL_NAMES = new Set([
   "playground_get_ika_explorer",
   "playground_create_dwallet",
   "playground_list_dwallets",
+  "playground_defi_deploy_sandbox",
+  "playground_defi_get_deployment",
+  "playground_defi_create_pool",
+  "playground_defi_faucet",
+  "playground_defi_add_liquidity",
+  "playground_defi_swap",
+  "playground_defi_get_pool_snapshot",
+  "playground_defi_list_pools",
+  "playground_defi_set_active_pool",
+  "playground_ptb_get_draft",
+  "playground_ptb_set_draft",
+  "playground_ptb_list_templates",
+  "playground_ptb_load_template",
+  "playground_ptb_preview",
+  "playground_ptb_execute",
   "packages_list_catalog",
   "packages_list_installed",
   "packages_get_toolchain_status",
@@ -284,6 +306,30 @@ export async function executeExtendedBelugaTool(
         };
       }
 
+      case "playground_list_wallets": {
+        const result = await getPlaygroundSigners();
+        return { text: JSON.stringify(result, null, 2), isError: false };
+      }
+
+      case "playground_get_wallet_assets": {
+        let address = (args?.address as string | undefined)?.trim();
+        if (!address) {
+          const active = await getActivePlaygroundSigner();
+          address = active.address?.trim() ?? "";
+        }
+        if (!address) {
+          return {
+            text: "No wallet address. Connect Beluga wallet or pass address.",
+            isError: true,
+          };
+        }
+        const assets = await fetchLocalWalletAssets(address);
+        return {
+          text: JSON.stringify(assets, null, 2),
+          isError: false,
+        };
+      }
+
       case "playground_start_ika_localnet": {
         const status = await startIkaLocalnet({
           reset: Boolean(args?.reset),
@@ -351,6 +397,179 @@ export async function executeExtendedBelugaTool(
         const caps = await callRenderer<unknown[]>("mcp:playground-list-dwallets");
         return {
           text: JSON.stringify(caps, null, 2),
+          isError: false,
+        };
+      }
+
+      case "playground_defi_deploy_sandbox": {
+        const result = await callRenderer<{
+          message: string;
+          deployment: unknown;
+        }>("mcp:playground-defi-deploy", {
+          network: args?.network as string | undefined,
+        });
+        const dep = result.deployment as { packageId?: string; network?: string } | null;
+        return {
+          text: `✅ ${result.message}\nPackage: ${dep?.packageId ?? "?"}\nNetwork: ${dep?.network ?? "?"}`,
+          isError: false,
+        };
+      }
+
+      case "playground_defi_get_deployment": {
+        const result = await callRenderer<unknown>("mcp:playground-defi-get-deployment");
+        return { text: JSON.stringify(result, null, 2), isError: false };
+      }
+
+      case "playground_defi_create_pool": {
+        const result = await callRenderer<{
+          message: string;
+          digest: string;
+          pool: { poolId?: string } | null;
+        }>("mcp:playground-defi-create-pool", {
+          coin_a: args?.coin_a as string,
+          coin_b: args?.coin_b as string,
+        });
+        return {
+          text: `✅ ${result.message}\nPool: ${result.pool?.poolId ?? "?"}\nDigest: ${result.digest}`,
+          isError: false,
+        };
+      }
+
+      case "playground_defi_faucet": {
+        const result = await callRenderer<{
+          message: string;
+          digest?: string;
+        }>("mcp:playground-defi-faucet", {
+          token: args?.token as string | undefined,
+          amount: args?.amount as string | undefined,
+          amount_a: args?.amount_a as string | undefined,
+          amount_b: args?.amount_b as string | undefined,
+        });
+        return {
+          text: `✅ ${result.message}${result.digest ? `\nDigest: ${result.digest}` : ""}`,
+          isError: false,
+        };
+      }
+
+      case "playground_defi_add_liquidity": {
+        const result = await callRenderer<{
+          message: string;
+          digest: string;
+        }>("mcp:playground-defi-add-liquidity", {
+          amount_a: args?.amount_a as string,
+          amount_b: args?.amount_b as string,
+          pool_id: args?.pool_id as string | undefined,
+        });
+        return {
+          text: `✅ ${result.message}\nDigest: ${result.digest}`,
+          isError: false,
+        };
+      }
+
+      case "playground_defi_swap": {
+        const result = await callRenderer<{
+          message: string;
+          digest: string;
+          estimatedOut: string;
+        }>("mcp:playground-defi-swap", {
+          direction: args?.direction as string,
+          amount_in: args?.amount_in as string,
+          pool_id: args?.pool_id as string | undefined,
+          slippage_bps: args?.slippage_bps as number | undefined,
+        });
+        return {
+          text: `✅ ${result.message}\nDigest: ${result.digest}\nEst. out (raw): ${result.estimatedOut}`,
+          isError: false,
+        };
+      }
+
+      case "playground_defi_get_pool_snapshot": {
+        const result = await callRenderer<unknown>("mcp:playground-defi-get-pool-snapshot", {
+          pool_id: args?.pool_id as string | undefined,
+        });
+        return { text: JSON.stringify(result, null, 2), isError: false };
+      }
+
+      case "playground_defi_list_pools": {
+        const result = await callRenderer<unknown>("mcp:playground-defi-list-pools");
+        return { text: JSON.stringify(result, null, 2), isError: false };
+      }
+
+      case "playground_defi_set_active_pool": {
+        const result = await callRenderer<{
+          message: string;
+          activePoolId: string | null;
+        }>("mcp:playground-defi-set-active-pool", {
+          pool_id: args?.pool_id as string,
+        });
+        return {
+          text: `✅ ${result.message}\nActive pool: ${result.activePoolId ?? "none"}`,
+          isError: false,
+        };
+      }
+
+      case "playground_ptb_get_draft": {
+        const result = await callRenderer<{
+          preview: string;
+          stepCount: number;
+          draft: unknown;
+        }>("mcp:playground-ptb-get-draft");
+        return {
+          text: `${result.preview || "(empty)"}\n\n${JSON.stringify(result.draft, null, 2)}`,
+          isError: false,
+        };
+      }
+
+      case "playground_ptb_set_draft": {
+        const result = await callRenderer<{
+          message: string;
+          preview: string;
+        }>("mcp:playground-ptb-set-draft", {
+          draft: args?.draft,
+        });
+        return {
+          text: `✅ ${result.message}\n${result.preview}`,
+          isError: false,
+        };
+      }
+
+      case "playground_ptb_list_templates": {
+        const result = await callRenderer<unknown>("mcp:playground-ptb-list-templates");
+        return { text: JSON.stringify(result, null, 2), isError: false };
+      }
+
+      case "playground_ptb_load_template": {
+        const result = await callRenderer<{
+          message: string;
+          preview: string;
+        }>("mcp:playground-ptb-load-template", {
+          template_id: args?.template_id as string,
+        });
+        return {
+          text: `✅ ${result.message}\n${result.preview}`,
+          isError: false,
+        };
+      }
+
+      case "playground_ptb_preview": {
+        const result = await callRenderer<{ preview: string }>(
+          "mcp:playground-ptb-preview",
+          args?.draft ? { draft: args.draft } : undefined,
+        );
+        return { text: result.preview || "(empty PTB)", isError: false };
+      }
+
+      case "playground_ptb_execute": {
+        const result = await callRenderer<{
+          message: string;
+          digest: string;
+          preview: string;
+        }>("mcp:playground-ptb-execute", {
+          draft: args?.draft,
+          network: args?.network as string | undefined,
+        });
+        return {
+          text: `✅ ${result.message}\nDigest: ${result.digest}\n\n${result.preview}`,
           isError: false,
         };
       }

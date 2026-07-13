@@ -327,7 +327,7 @@ export function PlaygroundDock({
                       <p className="text-[12px] text-[#8888a0] leading-relaxed">
                         {network === "localnet"
                           ? "Request SUI from the local faucet for gas on your running localnet."
-                          : `Request free SUI from the official ${NETWORK_CONFIG[network].label} faucet for gas fees.`}
+                          : `Request SUI from Mysten's official ${NETWORK_CONFIG[network].label} faucet (~1 request/min per IP). For DeFi Sandbox, use Localnet instead.`}
                       </p>
                       {walletAddress && suiBalance != null && (
                         <div className="rounded-xl border border-[#2a2a3c] bg-[#1a1a26] px-3 py-2 text-[12px] font-mono text-[#a8b0c8]">

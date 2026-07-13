@@ -115,6 +115,43 @@ export interface LocalAddressOverview {
   objectCount: number;
 }
 
+export interface LocalWalletBalanceSummary {
+  coinType: string;
+  symbol: string;
+  name: string | null;
+  decimals: number;
+  totalBalance: string;
+  formattedBalance: string;
+}
+
+export interface LocalWalletCoinObject {
+  coinObjectId: string;
+  coinType: string;
+  symbol: string;
+  balance: string;
+  formattedBalance: string;
+  version: string | null;
+  digest: string | null;
+}
+
+export interface LocalWalletOwnedObject {
+  objectId: string;
+  objectType: string | null;
+  version: string | null;
+  digest: string | null;
+  displayName: string | null;
+  displayDescription: string | null;
+  displayImageUrl: string | null;
+}
+
+export interface LocalWalletAssets {
+  address: string;
+  suiBalance: number;
+  balances: LocalWalletBalanceSummary[];
+  coins: LocalWalletCoinObject[];
+  objects: LocalWalletOwnedObject[];
+}
+
 export interface LocalObjectSummary {
   objectId: string;
   version: string | null;

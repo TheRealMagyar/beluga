@@ -30,6 +30,12 @@ import { PlaygroundConsole } from "./playgroundComponents/PlaygroundConsole";
 import { ConsoleErrorBoundary } from "../components/ConsoleErrorBoundary";
 import { LocalExplorer } from "./playgroundComponents/LocalExplorer";
 import { IkaPlayground } from "./playgroundComponents/IkaPlayground";
+import { DefiPlayground } from "./playgroundComponents/DefiPlayground";
+import { PtbPlayground } from "./playgroundComponents/PtbPlayground";
+import {
+  PlaygroundTabs,
+  type PlaygroundTab,
+} from "./playgroundComponents/PlaygroundTabs";
 import {
   listTestableProjects,
   loadProjectIntoPlayground,
@@ -51,8 +57,6 @@ import {
 const FILES_STORAGE_KEY = "beluga-playground-files-v1";
 const LOADED_PROJECT_KEY = "beluga-playground-loaded-project-v1";
 const PLAYGROUND_TAB_KEY = "beluga-playground-active-tab-v1";
-
-type PlaygroundTab = "move" | "ika";
 
 function loadFiles(): PlaygroundFile[] {
   try {
@@ -113,7 +117,8 @@ export function PlaygroundPage() {
   const [ikaToolchainReady, setIkaToolchainReady] = useState(false);
   const [activeTab, setActiveTab] = useState<PlaygroundTab>(() => {
     const saved = localStorage.getItem(PLAYGROUND_TAB_KEY);
-    return saved === "ika" ? "ika" : "move";
+    if (saved === "ika" || saved === "defi" || saved === "ptb") return saved;
+    return "move";
   });
 
   const activeFile = useMemo(
@@ -592,9 +597,32 @@ export function PlaygroundPage() {
       return;
     }
 
+    if (faucetLoading) return;
+
+    const {
+      checkFaucetThrottle,
+      faucetDebounceMessage,
+      formatFaucetRateLimitMessage,
+      isFaucetRateLimitError,
+      markFaucetRequested,
+    } = await import("../../helper/faucet-throttle");
+
+    const throttle = checkFaucetThrottle();
+    if (!throttle.allowed && throttle.waitSeconds) {
+      addLog(
+        "warn",
+        faucetDebounceMessage(
+          throttle.waitSeconds,
+          NETWORK_CONFIG[network].label,
+        ),
+      );
+      return;
+    }
+
     setFaucetLoading(true);
     addLog("info", `Requesting SUI from ${NETWORK_CONFIG[network].label} faucet...`);
     try {
+      markFaucetRequested();
       if (network === "localnet") {
         const result = await window.playground.requestLocalFaucet(
           effectiveAddress,
@@ -606,7 +634,11 @@ export function PlaygroundPage() {
           recipient: effectiveAddress,
         });
         if (!result.success) {
-          throw new Error(result.error || "Faucet request failed.");
+          const error = result.error || "Faucet request failed.";
+          if (isFaucetRateLimitError(error)) {
+            throw new Error(formatFaucetRateLimitMessage(NETWORK_CONFIG[network].label));
+          }
+          throw new Error(error);
         }
         addLog(
           "success",
@@ -616,8 +648,9 @@ export function PlaygroundPage() {
       }
       await refreshBalance();
       await refreshWallet();
-    } catch (e: any) {
-      addLog("error", e.message || "Faucet request failed.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Faucet request failed.";
+      addLog("error", message);
     }
     setFaucetLoading(false);
   };
@@ -635,19 +668,43 @@ export function PlaygroundPage() {
     return (
       <div className="flex flex-col h-full min-h-0 bg-[#080810]">
         <header className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-[#101018]">
-          <div className="flex items-center rounded-xl border border-[#2a2a3c] bg-[#0d0d14] p-0.5">
-            <button
-              onClick={() => setActiveTab("move")}
-              className="h-7 px-3 rounded-lg text-[11px] border-none cursor-pointer bg-transparent text-[#8888a0] hover:text-[#f0f0f5] transition-colors"
-            >
-              Move
-            </button>
-            <button className="h-7 px-3 rounded-lg text-[11px] border-none cursor-pointer bg-[#00e5ff]/14 text-[#00e5ff] font-medium">
-              Ika
-            </button>
-          </div>
+          <PlaygroundTabs
+            active={activeTab}
+            onChange={setActiveTab}
+            ikaReady={ikaToolchainReady}
+          />
         </header>
         <IkaPlayground />
+      </div>
+    );
+  }
+
+  if (activeTab === "defi") {
+    return (
+      <div className="flex flex-col h-full min-h-0 bg-[#080810]">
+        <header className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-[#101018]">
+          <PlaygroundTabs
+            active={activeTab}
+            onChange={setActiveTab}
+            ikaReady={ikaToolchainReady}
+          />
+        </header>
+        <DefiPlayground />
+      </div>
+    );
+  }
+
+  if (activeTab === "ptb") {
+    return (
+      <div className="flex flex-col h-full min-h-0 bg-[#080810]">
+        <header className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-[#101018]">
+          <PlaygroundTabs
+            active={activeTab}
+            onChange={setActiveTab}
+            ikaReady={ikaToolchainReady}
+          />
+        </header>
+        <PtbPlayground />
       </div>
     );
   }
@@ -655,19 +712,11 @@ export function PlaygroundPage() {
   return (
     <div className="flex flex-col h-full min-h-0 bg-[#080810]">
       <header className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-[#101018]">
-        {ikaToolchainReady && (
-          <div className="flex items-center rounded-xl border border-[#2a2a3c] bg-[#0d0d14] p-0.5">
-            <button className="h-7 px-3 rounded-lg text-[11px] border-none cursor-pointer bg-[#4ca3ff]/14 text-[#4ca3ff] font-medium">
-              Move
-            </button>
-            <button
-              onClick={() => setActiveTab("ika")}
-              className="h-7 px-3 rounded-lg text-[11px] border-none cursor-pointer bg-transparent text-[#8888a0] hover:text-[#f0f0f5] transition-colors"
-            >
-              Ika
-            </button>
-          </div>
-        )}
+        <PlaygroundTabs
+          active={activeTab}
+          onChange={setActiveTab}
+          ikaReady={ikaToolchainReady}
+        />
 
         <select
           value={loadedProject?.path ?? ""}

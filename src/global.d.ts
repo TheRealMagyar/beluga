@@ -1037,6 +1037,36 @@ interface Window {
       coinCount: number;
       objectCount: number;
     }>;
+    getLocalWalletAssets: (params: { address: string }) => Promise<{
+      address: string;
+      suiBalance: number;
+      balances: Array<{
+        coinType: string;
+        symbol: string;
+        name: string | null;
+        decimals: number;
+        totalBalance: string;
+        formattedBalance: string;
+      }>;
+      coins: Array<{
+        coinObjectId: string;
+        coinType: string;
+        symbol: string;
+        balance: string;
+        formattedBalance: string;
+        version: string | null;
+        digest: string | null;
+      }>;
+      objects: Array<{
+        objectId: string;
+        objectType: string | null;
+        version: string | null;
+        digest: string | null;
+        displayName: string | null;
+        displayDescription: string | null;
+        displayImageUrl: string | null;
+      }>;
+    }>;
     getLocalObject: (params: { objectId: string }) => Promise<{
       objectId: string;
       version: string | null;

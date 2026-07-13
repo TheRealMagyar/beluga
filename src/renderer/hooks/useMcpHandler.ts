@@ -211,6 +211,150 @@ export function useMcpHandler({
 
         return listOwnedDWalletCaps(ikaClient, suiClient, walletAddress);
       },
+
+      'mcp:playground-defi-deploy': async (payload: { network?: string }) => {
+        const { mcpDefiDeploySandbox } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiDeploySandbox(payload);
+      },
+
+      'mcp:playground-defi-get-deployment': async () => {
+        const { mcpDefiGetDeployment } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiGetDeployment();
+      },
+
+      'mcp:playground-defi-create-pool': async (payload: {
+        coin_a: string;
+        coin_b: string;
+      }) => {
+        const { mcpDefiCreatePool } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiCreatePool(payload);
+      },
+
+      'mcp:playground-defi-faucet': async (payload: {
+        token?: string;
+        amount?: string;
+        amount_a?: string;
+        amount_b?: string;
+      }) => {
+        const { mcpDefiFaucet } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiFaucet(payload);
+      },
+
+      'mcp:playground-defi-add-liquidity': async (payload: {
+        amount_a: string;
+        amount_b: string;
+        pool_id?: string;
+      }) => {
+        const { mcpDefiAddLiquidity } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiAddLiquidity(payload);
+      },
+
+      'mcp:playground-defi-swap': async (payload: {
+        direction: string;
+        amount_in: string;
+        pool_id?: string;
+        slippage_bps?: number;
+      }) => {
+        const { mcpDefiSwap } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiSwap(payload);
+      },
+
+      'mcp:playground-defi-get-pool-snapshot': async (payload?: {
+        pool_id?: string;
+      }) => {
+        const { mcpDefiGetPoolSnapshot } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiGetPoolSnapshot(payload);
+      },
+
+      'mcp:playground-defi-list-pools': async () => {
+        const { mcpDefiListPools } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiListPools();
+      },
+
+      'mcp:playground-defi-set-active-pool': async (payload: {
+        pool_id: string;
+      }) => {
+        const { mcpDefiSetActivePool } = await import(
+          '../pages/playgroundComponents/defi-playground-mcp'
+        );
+        return mcpDefiSetActivePool(payload);
+      },
+
+      'mcp:playground-ptb-get-draft': async () => {
+        const { mcpPtbGetDraft } = await import(
+          '../pages/playgroundComponents/ptb-playground-mcp'
+        );
+        return mcpPtbGetDraft();
+      },
+
+      'mcp:playground-ptb-set-draft': async (payload: { draft: unknown }) => {
+        const { mcpPtbSetDraft } = await import(
+          '../pages/playgroundComponents/ptb-playground-mcp'
+        );
+        return mcpPtbSetDraft({ draft: payload.draft as import('../pages/playgroundComponents/ptb-playground-types').PtbDraft });
+      },
+
+      'mcp:playground-ptb-list-templates': async () => {
+        const { mcpPtbListTemplates } = await import(
+          '../pages/playgroundComponents/ptb-playground-mcp'
+        );
+        return mcpPtbListTemplates();
+      },
+
+      'mcp:playground-ptb-load-template': async (payload: {
+        template_id: string;
+      }) => {
+        const { mcpPtbLoadTemplate } = await import(
+          '../pages/playgroundComponents/ptb-playground-mcp'
+        );
+        return mcpPtbLoadTemplate(payload);
+      },
+
+      'mcp:playground-ptb-preview': async (payload?: { draft?: unknown }) => {
+        const { mcpPtbPreview } = await import(
+          '../pages/playgroundComponents/ptb-playground-mcp'
+        );
+        return mcpPtbPreview(
+          payload?.draft
+            ? { draft: payload.draft as import('../pages/playgroundComponents/ptb-playground-types').PtbDraft }
+            : undefined,
+        );
+      },
+
+      'mcp:playground-ptb-execute': async (payload?: {
+        draft?: unknown;
+        network?: string;
+      }) => {
+        const { mcpPtbExecute } = await import(
+          '../pages/playgroundComponents/ptb-playground-mcp'
+        );
+        return mcpPtbExecute(
+          payload
+            ? {
+                network: payload.network,
+                draft: payload.draft as
+                  | import('../pages/playgroundComponents/ptb-playground-types').PtbDraft
+                  | undefined,
+              }
+            : undefined,
+        );
+      },
     };
 
     console.log('[MCP] Handlerek regisztrálása... (memwalClient ready:', !!stateRef.current.memwalClient, ')');

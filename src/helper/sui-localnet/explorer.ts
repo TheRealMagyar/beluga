@@ -11,6 +11,10 @@ import type {
   LocalObjectSummary,
   LocalTransactionDetail,
   LocalTransactionSummary,
+  LocalWalletAssets,
+  LocalWalletBalanceSummary,
+  LocalWalletCoinObject,
+  LocalWalletOwnedObject,
 } from "./types";
 
 function createLocalRpcClient(rpcUrl = DEFAULT_RPC_URL) {
@@ -20,12 +24,30 @@ function createLocalRpcClient(rpcUrl = DEFAULT_RPC_URL) {
   });
 }
 
+function wrapLocalRpcError(err: unknown): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/fetch failed|ECONNREFUSED|network/i.test(message)) {
+    return new Error(
+      "Localnet RPC unreachable. Start Sui localnet from the Playground network panel.",
+    );
+  }
+  return err instanceof Error ? err : new Error(message);
+}
+
 async function requireRunningLocalNetwork() {
   const status = await refreshLocalNetworkStatus();
   if (!status.rpcReady) {
     throw new Error("Local network is not running.");
   }
   return status;
+}
+
+async function withLocalRpc<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    throw wrapLocalRpcError(err);
+  }
 }
 
 function mapObjectChanges(
@@ -254,44 +276,46 @@ export async function fetchLocalTransactions(
   address?: string,
   limit = 30,
 ): Promise<LocalTransactionSummary[]> {
-  const status = requireRunningLocalNetwork();
+  return withLocalRpc(async () => {
+    const status = await requireRunningLocalNetwork();
 
-  let targetAddress = address?.trim();
-  if (!targetAddress) {
-    return fetchRecentLocalTransactions(limit);
-  }
-
-  const client = createLocalRpcClient(status.rpcUrl);
-  const options = {
-    showInput: true,
-    showEffects: true,
-  };
-
-  const results = await Promise.all([
-    client.queryTransactionBlocks({
-      filter: { FromAddress: targetAddress },
-      options,
-      order: "descending",
-      limit,
-    }),
-    client.queryTransactionBlocks({
-      filter: { ToAddress: targetAddress },
-      options,
-      order: "descending",
-      limit,
-    }),
-  ]);
-  const merged = new Map<string, LocalTransactionSummary>();
-
-  for (const result of results) {
-    for (const tx of result.data ?? []) {
-      merged.set(tx.digest, mapTransactionSummary(tx));
+    const targetAddress = address?.trim();
+    if (!targetAddress) {
+      return fetchRecentLocalTransactions(limit);
     }
-  }
 
-  return Array.from(merged.values())
-    .sort((a, b) => Number(b.timestampMs ?? 0) - Number(a.timestampMs ?? 0))
-    .slice(0, limit);
+    const client = createLocalRpcClient(status.rpcUrl);
+    const options = {
+      showInput: true,
+      showEffects: true,
+    };
+
+    const results = await Promise.all([
+      client.queryTransactionBlocks({
+        filter: { FromAddress: targetAddress },
+        options,
+        order: "descending",
+        limit,
+      }),
+      client.queryTransactionBlocks({
+        filter: { ToAddress: targetAddress },
+        options,
+        order: "descending",
+        limit,
+      }),
+    ]);
+    const merged = new Map<string, LocalTransactionSummary>();
+
+    for (const result of results) {
+      for (const tx of result.data ?? []) {
+        merged.set(tx.digest, mapTransactionSummary(tx));
+      }
+    }
+
+    return Array.from(merged.values())
+      .sort((a, b) => Number(b.timestampMs ?? 0) - Number(a.timestampMs ?? 0))
+      .slice(0, limit);
+  });
 }
 
 export async function fetchLocalTransactionDetail(
@@ -309,6 +333,205 @@ export async function fetchLocalTransactionDetail(
     },
   });
   return mapTransactionDetail(tx);
+}
+
+const SUI_COIN_TYPE = "0x2::sui::SUI";
+const WALLET_ASSETS_COIN_LIMIT = 120;
+const WALLET_ASSETS_OBJECT_LIMIT = 120;
+
+function shortCoinTypeLabel(coinType: string): string {
+  const parts = coinType.split("::");
+  if (parts.length >= 2) {
+    return `${parts[parts.length - 2]}::${parts[parts.length - 1]}`;
+  }
+  return coinType.length > 20 ? `${coinType.slice(0, 10)}…` : coinType;
+}
+
+function formatTokenAmount(raw: string, decimals: number): string {
+  const value = BigInt(raw);
+  if (value === 0n) return "0";
+  const base = 10n ** BigInt(decimals);
+  const whole = value / base;
+  const fraction = value % base;
+  if (fraction === 0n) return whole.toString();
+  const fracStr = fraction
+    .toString()
+    .padStart(decimals, "0")
+    .replace(/0+$/, "");
+  return `${whole}.${fracStr}`;
+}
+
+function isCoinStructType(objectType: string | null | undefined): boolean {
+  return Boolean(objectType?.includes("::coin::Coin<"));
+}
+
+function readDisplayField(display: unknown, key: string): string | null {
+  if (!display || typeof display !== "object") return null;
+  const data = (display as { data?: Record<string, unknown> }).data;
+  if (!data || typeof data !== "object") return null;
+  const value = data[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+async function fetchAllCoinObjects(
+  client: ReturnType<typeof createLocalRpcClient>,
+  owner: string,
+) {
+  const coins: Array<{
+    coinObjectId: string;
+    coinType: string;
+    balance: string;
+    version: string;
+    digest: string;
+  }> = [];
+  let cursor: string | null | undefined = undefined;
+
+  do {
+    const page = await client.getCoins({ owner, cursor, limit: 50 });
+    for (const coin of page.data ?? []) {
+      coins.push({
+        coinObjectId: coin.coinObjectId,
+        coinType: coin.coinType,
+        balance: coin.balance,
+        version: coin.version,
+        digest: coin.digest,
+      });
+      if (coins.length >= WALLET_ASSETS_COIN_LIMIT) break;
+    }
+    cursor = page.hasNextPage ? page.nextCursor : null;
+  } while (cursor && coins.length < WALLET_ASSETS_COIN_LIMIT);
+
+  return coins;
+}
+
+async function fetchAllOwnedObjectSummaries(
+  client: ReturnType<typeof createLocalRpcClient>,
+  owner: string,
+) {
+  const objects: LocalWalletOwnedObject[] = [];
+  let cursor: string | null | undefined = undefined;
+
+  do {
+    const page = await client.getOwnedObjects({
+      owner,
+      cursor,
+      limit: 50,
+      options: { showType: true, showDisplay: true, showContent: true },
+    });
+
+    for (const entry of page.data ?? []) {
+      const data = entry.data;
+      if (!data) continue;
+      const objectType = data.type ?? null;
+      if (isCoinStructType(objectType)) continue;
+
+      objects.push({
+        objectId: data.objectId,
+        objectType,
+        version: data.version ?? null,
+        digest: data.digest ?? null,
+        displayName: readDisplayField(data.display, "name"),
+        displayDescription: readDisplayField(data.display, "description"),
+        displayImageUrl: readDisplayField(data.display, "image_url"),
+      });
+
+      if (objects.length >= WALLET_ASSETS_OBJECT_LIMIT) break;
+    }
+
+    cursor = page.hasNextPage ? page.nextCursor : null;
+  } while (cursor && objects.length < WALLET_ASSETS_OBJECT_LIMIT);
+
+  return objects;
+}
+
+export async function fetchLocalWalletAssets(
+  address: string,
+): Promise<LocalWalletAssets> {
+  return withLocalRpc(async () => {
+    const status = await requireRunningLocalNetwork();
+    const client = createLocalRpcClient(status.rpcUrl);
+    const target = address.trim();
+
+    const [allBalances, coinObjects, ownedObjects] = await Promise.all([
+      client.getAllBalances({ owner: target }),
+      fetchAllCoinObjects(client, target),
+      fetchAllOwnedObjectSummaries(client, target),
+    ]);
+
+    const coinTypes = [
+      ...new Set([
+        ...allBalances.map((entry) => entry.coinType),
+        ...coinObjects.map((coin) => coin.coinType),
+      ]),
+    ];
+
+    const metadataByType = new Map<
+      string,
+      { symbol: string | null; name: string | null; decimals: number }
+    >();
+
+    await Promise.all(
+      coinTypes.map(async (coinType) => {
+        try {
+          const meta = await client.getCoinMetadata({ coinType });
+          metadataByType.set(coinType, {
+            symbol: meta?.symbol ?? null,
+            name: meta?.name ?? null,
+            decimals: meta?.decimals ?? 9,
+          });
+        } catch {
+          metadataByType.set(coinType, {
+            symbol: null,
+            name: null,
+            decimals: 9,
+          });
+        }
+      }),
+    );
+
+    const balances: LocalWalletBalanceSummary[] = allBalances
+      .map((entry) => {
+        const meta = metadataByType.get(entry.coinType);
+        const decimals = meta?.decimals ?? 9;
+        return {
+          coinType: entry.coinType,
+          symbol: meta?.symbol ?? shortCoinTypeLabel(entry.coinType),
+          name: meta?.name ?? null,
+          decimals,
+          totalBalance: entry.totalBalance,
+          formattedBalance: formatTokenAmount(entry.totalBalance, decimals),
+        };
+      })
+      .sort((a, b) => {
+        if (a.coinType === SUI_COIN_TYPE) return -1;
+        if (b.coinType === SUI_COIN_TYPE) return 1;
+        return a.symbol.localeCompare(b.symbol);
+      });
+
+    const coins: LocalWalletCoinObject[] = coinObjects.map((coin) => {
+      const meta = metadataByType.get(coin.coinType);
+      const decimals = meta?.decimals ?? 9;
+      return {
+        coinObjectId: coin.coinObjectId,
+        coinType: coin.coinType,
+        symbol: meta?.symbol ?? shortCoinTypeLabel(coin.coinType),
+        balance: coin.balance,
+        formattedBalance: formatTokenAmount(coin.balance, decimals),
+        version: coin.version,
+        digest: coin.digest,
+      };
+    });
+
+    const suiEntry = balances.find((entry) => entry.coinType === SUI_COIN_TYPE);
+
+    return {
+      address: target,
+      suiBalance: suiEntry ? Number(suiEntry.totalBalance) / 1_000_000_000 : 0,
+      balances,
+      coins,
+      objects: ownedObjects,
+    };
+  });
 }
 
 export async function fetchLocalAddressOverview(

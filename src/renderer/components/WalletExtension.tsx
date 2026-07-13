@@ -146,12 +146,42 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
     if (
       !walletInfo?.address ||
       !networkConfig.faucet ||
-      network === "mainnet"
+      network === "mainnet" ||
+      faucetLoading
     ) {
       return;
     }
+
+    const {
+      checkFaucetThrottle,
+      faucetDebounceMessage,
+      formatFaucetRateLimitMessage,
+      isFaucetRateLimitError,
+      markFaucetRequested,
+    } = await import("../../helper/faucet-throttle");
+
+    const throttle = checkFaucetThrottle();
+    if (!throttle.allowed && throttle.waitSeconds) {
+      setFaucetMessage(
+        faucetDebounceMessage(throttle.waitSeconds, networkLabel),
+      );
+      return;
+    }
+
     setFaucetLoading(true);
     setFaucetMessage(null);
+    markFaucetRequested();
+
+    if (network === "localnet") {
+      const result = await window.playground.requestLocalFaucet(
+        walletInfo.address,
+      );
+      setFaucetLoading(false);
+      setFaucetMessage(result.message);
+      refresh();
+      return;
+    }
+
     const result = await window.sui.requestFaucet({
       network,
       recipient: walletInfo.address,
@@ -163,7 +193,12 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
       );
       refresh();
     } else {
-      setFaucetMessage(result.error || "Faucet request failed.");
+      const error = result.error || "Faucet request failed.";
+      if (isFaucetRateLimitError(error)) {
+        setFaucetMessage(formatFaucetRateLimitMessage(networkLabel));
+      } else {
+        setFaucetMessage(error);
+      }
     }
   }
 

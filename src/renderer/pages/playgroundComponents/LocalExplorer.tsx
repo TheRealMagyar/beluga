@@ -8,7 +8,10 @@ import {
   CheckCircle2,
   XCircle,
   ArrowLeft,
+  List,
+  Wallet,
 } from "lucide-react";
+import { LocalExplorerWallets } from "./LocalExplorerWallets";
 
 type LocalTx = Awaited<
   ReturnType<typeof window.playground.getLocalRecentTransactions>
@@ -127,7 +130,7 @@ function EventCard({ event, index }: { event: LocalEvent; index: number }) {
   );
 }
 
-function CopyBtn({ value }: { value: string }) {
+export function CopyBtn({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -338,6 +341,8 @@ export function TxDetailView({
   );
 }
 
+type ExplorerPanel = "transactions" | "wallets";
+
 export function LocalExplorer({
   open,
   walletAddress,
@@ -349,6 +354,7 @@ export function LocalExplorer({
   onClose: () => void;
   onLog: (level: "info" | "success" | "warn" | "error", message: string) => void;
 }) {
+  const [panel, setPanel] = useState<ExplorerPanel>("transactions");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [transactions, setTransactions] = useState<LocalTx[]>([]);
   const [selectedDigest, setSelectedDigest] = useState<string | null>(null);
@@ -376,6 +382,13 @@ export function LocalExplorer({
   const refreshList = useCallback(async () => {
     setListLoading(true);
     try {
+      const status = await window.playground.getLocalNetworkStatus();
+      if (!status.rpcReady) {
+        setOverview(null);
+        setTransactions([]);
+        return;
+      }
+
       const filter = addressFilter.trim();
       const [ov, txs] = await Promise.all([
         window.playground.getLocalNetworkOverview(),
@@ -385,8 +398,15 @@ export function LocalExplorer({
       ]);
       setOverview(ov);
       setTransactions(txs);
-    } catch (e: any) {
-      onLog("error", e.message || "Explorer refresh failed.");
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Explorer refresh failed.";
+      if (/localnet rpc unreachable|local network is not running/i.test(message)) {
+        setOverview(null);
+        setTransactions([]);
+        return;
+      }
+      onLog("error", message);
     }
     setListLoading(false);
   }, [addressFilter, onLog]);
@@ -454,6 +474,33 @@ export function LocalExplorer({
           </p>
         </div>
 
+        <div className="flex items-center rounded-xl border border-[#2a2a3c] bg-[#0d0d14] p-0.5">
+          <button
+            type="button"
+            onClick={() => setPanel("transactions")}
+            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] border-none cursor-pointer transition-colors ${
+              panel === "transactions"
+                ? "bg-[#7dd3fc]/14 text-[#7dd3fc] font-medium"
+                : "bg-transparent text-[#8888a0] hover:text-[#f0f0f5]"
+            }`}
+          >
+            <List size={12} />
+            Transactions
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanel("wallets")}
+            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] border-none cursor-pointer transition-colors ${
+              panel === "wallets"
+                ? "bg-[#7dd3fc]/14 text-[#7dd3fc] font-medium"
+                : "bg-transparent text-[#8888a0] hover:text-[#f0f0f5]"
+            }`}
+          >
+            <Wallet size={12} />
+            Wallets
+          </button>
+        </div>
+
         <div className="hidden sm:flex items-center gap-2 text-[11px] font-mono text-[#8888a0]">
           <span className="px-2.5 py-1 rounded-lg bg-[#1e1e1e] border border-[#2a2a3c]">
             CP {overview?.latestCheckpoint ?? "—"}
@@ -497,6 +544,10 @@ export function LocalExplorer({
       </header>
 
       <div className="flex-1 min-h-0 flex">
+        {panel === "wallets" ? (
+          <LocalExplorerWallets walletAddress={walletAddress} onLog={onLog} />
+        ) : (
+        <>
         <aside className="w-[min(340px,38%)] flex-shrink-0 border-r border-white/[0.08] flex flex-col bg-[#0d0d14]">
           <div className="flex-shrink-0 p-3 border-b border-white/[0.06]">
             <input
@@ -567,6 +618,8 @@ export function LocalExplorer({
         <main className="flex-1 min-w-0 flex flex-col bg-[#0a0a0f]">
           <TxDetailView detail={detail} loading={detailLoading} />
         </main>
+        </>
+        )}
       </div>
     </div>
   );

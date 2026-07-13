@@ -40,6 +40,7 @@ import {
   fetchLocalObject,
   fetchLocalTransactionDetail,
   fetchLocalTransactions,
+  fetchLocalWalletAssets,
   fetchRecentLocalTransactions,
   getSuiClientStatus,
   getSuiLocalnetLogSnapshot,
@@ -232,6 +233,11 @@ export function registerPlaygroundIpc(ctx: MainIpcContext) {
     "playground:get-local-address-overview",
     async (_event, { address }: { address: string }) =>
       fetchLocalAddressOverview(address),
+  );
+  ipcMain.handle(
+    "playground:get-local-wallet-assets",
+    async (_event, { address }: { address: string }) =>
+      fetchLocalWalletAssets(address),
   );
   ipcMain.handle(
     "playground:get-local-object",

@@ -134,6 +134,27 @@ export const PLAYGROUND_TOOLS: BelugaToolDefinition[] = [
     inputSchema: emptySchema,
   },
   {
+    name: "playground_list_wallets",
+    description:
+      "List Beluga + playground test wallets on localnet with addresses and SUI balances. Use before inspecting assets.",
+    inputSchema: emptySchema,
+  },
+  {
+    name: "playground_get_wallet_assets",
+    description:
+      "Inspect a localnet wallet: aggregated coin balances, individual coin object IDs, and owned NFTs/objects (with display metadata). Requires localnet running.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: {
+          type: "string",
+          description:
+            "0x wallet address. Omit to use the active playground signer.",
+        },
+      },
+    },
+  },
+  {
     name: "playground_start_ika_localnet",
     description: "Start Ika localnet (dWallet protocol). Auto-heals if needed.",
     inputSchema: {
@@ -196,6 +217,198 @@ export const PLAYGROUND_TOOLS: BelugaToolDefinition[] = [
     name: "playground_list_dwallets",
     description: "List dWallet caps owned by the connected wallet on localnet.",
     inputSchema: emptySchema,
+  },
+  {
+    name: "playground_defi_deploy_sandbox",
+    description:
+      "Build and publish the beluga_defi sandbox package (AMM pool + TA/TB faucets). Requires wallet. Uses current network (localnet/testnet; not mainnet). Saves deployment for UI and later DeFi tools.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        network: {
+          type: "string",
+          enum: ["localnet", "testnet", "devnet"],
+          description: "Optional; defaults to wallet network",
+        },
+      },
+    },
+  },
+  {
+    name: "playground_defi_get_deployment",
+    description:
+      "Return saved DeFi sandbox deployment (package ID, faucet IDs, pools, active pool).",
+    inputSchema: emptySchema,
+  },
+  {
+    name: "playground_defi_create_pool",
+    description:
+      "Create a new AMM pool for a coin pair on the deployed beluga_defi package. Coin refs: sui, ta, tb, or full type strings.",
+    inputSchema: {
+      type: "object",
+      required: ["coin_a", "coin_b"],
+      properties: {
+        coin_a: {
+          type: "string",
+          description: 'e.g. "sui", "ta", or full coin type',
+        },
+        coin_b: {
+          type: "string",
+          description: 'e.g. "tb", "sui", or full coin type',
+        },
+      },
+    },
+  },
+  {
+    name: "playground_defi_faucet",
+    description:
+      "Mint sandbox TA/TB tokens from package faucets into the connected wallet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: {
+          type: "string",
+          enum: ["a", "b", "both", "ta", "tb", "token_a", "token_b"],
+          description: 'Which faucet (default "both")',
+        },
+        amount: {
+          type: "string",
+          description: 'Human amount when token is a/b (default "1000")',
+        },
+        amount_a: { type: "string", description: "TA amount when token is both" },
+        amount_b: { type: "string", description: "TB amount when token is both" },
+      },
+    },
+  },
+  {
+    name: "playground_defi_add_liquidity",
+    description:
+      "Add liquidity to the active pool (or pool_id). Amounts are human-readable (e.g. \"1\", \"100\").",
+    inputSchema: {
+      type: "object",
+      required: ["amount_a", "amount_b"],
+      properties: {
+        amount_a: { type: "string" },
+        amount_b: { type: "string" },
+        pool_id: { type: "string", description: "Optional pool object ID" },
+      },
+    },
+  },
+  {
+    name: "playground_defi_swap",
+    description:
+      "Swap on the DeFi sandbox AMM. direction: a_for_b (sell A for B) or b_for_a. Uses 1% slippage by default.",
+    inputSchema: {
+      type: "object",
+      required: ["direction", "amount_in"],
+      properties: {
+        direction: {
+          type: "string",
+          enum: ["a_for_b", "b_for_a", "a-for-b", "b-for-a"],
+        },
+        amount_in: { type: "string", description: "Human-readable input amount" },
+        pool_id: { type: "string" },
+        slippage_bps: {
+          type: "number",
+          description: "Slippage tolerance in basis points (default 100 = 1%)",
+        },
+      },
+    },
+  },
+  {
+    name: "playground_defi_get_pool_snapshot",
+    description:
+      "Read pool reserves and wallet balances for active pool or given pool_id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pool_id: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "playground_defi_list_pools",
+    description: "List all sandbox pools with reserves and active pool marker.",
+    inputSchema: emptySchema,
+  },
+  {
+    name: "playground_defi_set_active_pool",
+    description: "Set which pool is used for swap and add-liquidity when pool_id is omitted.",
+    inputSchema: {
+      type: "object",
+      required: ["pool_id"],
+      properties: {
+        pool_id: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "playground_ptb_get_draft",
+    description: "Return the saved PTB Playground draft (steps JSON + human preview).",
+    inputSchema: emptySchema,
+  },
+  {
+    name: "playground_ptb_set_draft",
+    description:
+      "Replace the PTB Playground draft. Steps support moveCall, splitCoins, mergeCoins, transferObjects with gas/object/pure/ref arguments.",
+    inputSchema: {
+      type: "object",
+      required: ["draft"],
+      properties: {
+        draft: {
+          type: "object",
+          description: "{ name, steps[] } — same shape as PTB Playground localStorage draft",
+        },
+      },
+    },
+  },
+  {
+    name: "playground_ptb_list_templates",
+    description: "List built-in PTB templates (split/transfer SUI, merge, move call, etc.).",
+    inputSchema: emptySchema,
+  },
+  {
+    name: "playground_ptb_load_template",
+    description: "Load a built-in PTB template into the playground draft.",
+    inputSchema: {
+      type: "object",
+      required: ["template_id"],
+      properties: {
+        template_id: {
+          type: "string",
+          enum: [
+            "split-transfer-sui",
+            "merge-coins",
+            "move-call",
+            "split-merge-transfer",
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: "playground_ptb_preview",
+    description: "Preview a PTB draft as human-readable steps without executing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        draft: { type: "object", description: "Optional; defaults to saved draft" },
+      },
+    },
+  },
+  {
+    name: "playground_ptb_execute",
+    description:
+      "Build, sign, and execute a PTB. Uses saved draft unless draft is passed. Requires wallet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        draft: { type: "object" },
+        network: {
+          type: "string",
+          enum: ["localnet", "testnet", "devnet", "mainnet"],
+        },
+      },
+    },
   },
 ];
 

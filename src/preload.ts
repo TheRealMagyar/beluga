@@ -595,6 +595,8 @@ contextBridge.exposeInMainWorld('playground', {
     ipcRenderer.invoke('playground:get-local-transaction-detail', params),
   getLocalAddressOverview: (params: { address: string }) =>
     ipcRenderer.invoke('playground:get-local-address-overview', params),
+  getLocalWalletAssets: (params: { address: string }) =>
+    ipcRenderer.invoke('playground:get-local-wallet-assets', params),
   getLocalObject: (params: { objectId: string }) =>
     ipcRenderer.invoke('playground:get-local-object', params),
   getIkaExplorerOverview: () =>

@@ -11,6 +11,10 @@ export type {
   LocalObjectSummary,
   LocalTransactionDetail,
   LocalTransactionSummary,
+  LocalWalletAssets,
+  LocalWalletBalanceSummary,
+  LocalWalletCoinObject,
+  LocalWalletOwnedObject,
   StartLocalNetworkOptions,
   SuiClientEnvironment,
   SuiClientStatus,
@@ -53,5 +57,6 @@ export {
   fetchLocalObject,
   fetchLocalTransactionDetail,
   fetchLocalTransactions,
+  fetchLocalWalletAssets,
   fetchRecentLocalTransactions,
 } from "./explorer";
