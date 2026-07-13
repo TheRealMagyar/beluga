@@ -6,6 +6,7 @@ import {
   ensureBelugaMoveHomeDir,
   ensureBelugaToolchainTmpDir,
   ensureBelugaToolchainWritable,
+  getBelugaSuiLocalnetDir,
   getIkaPersistedConfigDir,
   withBelugaTmpEnv,
 } from "../beluga-toolchain-path";
@@ -223,7 +224,14 @@ export async function startIkaLocalnet(
   pushIkaLog(`Using Move cache at ${moveHome} (MOVE_HOME).`);
 
   pushIkaLog("Waiting for Sui faucet to accept fund requests…");
-  const faucetReady = await waitForLocalFaucetReady(90_000);
+  const faucetReady = await waitForLocalFaucetReady(
+    process.platform === "win32" ? 180_000 : 120_000,
+    {
+      networkDir: getBelugaSuiLocalnetDir(true),
+      belugaTmpDir,
+      trySupplemental: true,
+    },
+  );
   if (!faucetReady) {
     throw new Error(IKA_FAUCET_FAILURE_HINT);
   }

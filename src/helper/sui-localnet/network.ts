@@ -24,8 +24,11 @@ import {
   ensureLocalEnvironment,
   switchSuiEnvironment,
 } from "./client";
-import { probeLocalFaucetReady } from "../sui-faucet";
-import { describeLocalnetStartupFailure } from "./config-repair";
+import { probeLocalFaucetStatus } from "../sui-faucet";
+import {
+  describeLocalnetStartupFailure,
+  ensureSuiLocalnetClientAssets,
+} from "./config-repair";
 import {
   ensureBelugaPersistedSuiGenesis,
   hasBelugaPersistedSuiGenesis,
@@ -140,15 +143,177 @@ export async function probeLocalRpcReady(
   }
 }
 
+export interface WaitForLocalFaucetOptions {
+  faucetUrl?: string;
+  networkDir?: string;
+  belugaTmpDir?: string;
+  trySupplemental?: boolean;
+}
+
+async function resolveSuiFaucetBinary(): Promise<string | null> {
+  const suiBin = resolveSuiBinary();
+  const names =
+    process.platform === "win32"
+      ? ["sui-faucet.exe", "sui-faucet"]
+      : ["sui-faucet"];
+
+  if (suiBin.includes(path.sep)) {
+    const dir = path.dirname(suiBin);
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      try {
+        await fs.access(candidate);
+        return candidate;
+      } catch {
+        // try next candidate
+      }
+    }
+  }
+
+  for (const name of names) {
+    try {
+      await execFileAsync(name, ["--help"], {
+        timeout: 5_000,
+        env: toolchainEnv(),
+      });
+      return name;
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return null;
+}
+
+async function stopSupplementalFaucet() {
+  const proc = suiLocalnetRuntime.supplementalFaucetProcess;
+  if (!proc || proc.killed) {
+    suiLocalnetRuntime.supplementalFaucetProcess = null;
+    return;
+  }
+  const pid = proc.pid;
+  if (pid) {
+    await killPid(pid);
+  } else {
+    proc.kill("SIGKILL");
+  }
+  suiLocalnetRuntime.supplementalFaucetProcess = null;
+}
+
+async function tryStartSupplementalLocalFaucet(
+  networkDir: string,
+  belugaTmpDir: string,
+): Promise<boolean> {
+  if (
+    suiLocalnetRuntime.supplementalFaucetProcess &&
+    !suiLocalnetRuntime.supplementalFaucetProcess.killed
+  ) {
+    return true;
+  }
+
+  const binary = await resolveSuiFaucetBinary();
+  if (!binary) {
+    pushLog(
+      "sui-faucet binary not found — embedded faucet is required on this Sui install.",
+    );
+    return false;
+  }
+
+  pushLog(`Starting supplemental sui-faucet (${binary}) for ${networkDir}…`);
+  const child = spawnWithLineBufferedLogs(
+    binary,
+    ["--port", "9123", "--host-ip", "127.0.0.1"],
+    {
+      env: {
+        ...withBelugaTmpEnv(toolchainEnv(), belugaTmpDir),
+        SUI_CONFIG_DIR: networkDir,
+        RUST_LOG: "info",
+      },
+    },
+  );
+
+  suiLocalnetRuntime.supplementalFaucetProcess = child;
+  child.stdout.on("data", (chunk) => {
+    pushLog(`[faucet] ${chunk.toString()}`);
+  });
+  child.stderr.on("data", (chunk) => {
+    pushLog(`[faucet] ${chunk.toString()}`);
+  });
+  child.on("exit", (code) => {
+    pushLog(`Supplemental faucet exited with code ${code ?? "unknown"}.`);
+    suiLocalnetRuntime.supplementalFaucetProcess = null;
+  });
+
+  await sleep(2_000);
+  return (await findListenerPidsOnPort(9123)).length > 0;
+}
+
+async function ensureLocalnetFaucetAssets(
+  networkDir: string,
+  forIka: boolean,
+): Promise<void> {
+  const keystorePath = path.join(networkDir, "sui.keystore");
+  try {
+    await fs.access(keystorePath);
+    return;
+  } catch {
+    // restore below
+  }
+
+  const restored = await ensureSuiLocalnetClientAssets(networkDir, forIka);
+  if (restored) {
+    pushLog("Restored localnet faucet keystore (sui.keystore).");
+  }
+
+  try {
+    await fs.access(keystorePath);
+  } catch {
+    throw new Error(
+      "Persisted localnet is missing its faucet keystore (sui.keystore). " +
+        "Press Reset in the Ika CLI panel to regenerate genesis.",
+    );
+  }
+}
+
 export async function waitForLocalFaucetReady(
   timeoutMs: number,
-  faucetUrl = DEFAULT_FAUCET_URL,
+  options: WaitForLocalFaucetOptions = {},
 ): Promise<boolean> {
+  const faucetUrl = options.faucetUrl ?? DEFAULT_FAUCET_URL;
   const started = Date.now();
+  let supplementalAttempted = false;
+  let misconfiguredStreak = 0;
+
   while (Date.now() - started < timeoutMs) {
-    if (await probeLocalFaucetReady(faucetUrl)) {
+    const status = await probeLocalFaucetStatus(faucetUrl);
+    if (status === "ready") {
       return true;
     }
+
+    if (status === "misconfigured") {
+      misconfiguredStreak += 1;
+      if (misconfiguredStreak >= 3) {
+        return false;
+      }
+    } else {
+      misconfiguredStreak = 0;
+    }
+
+    if (
+      options.trySupplemental !== false &&
+      !supplementalAttempted &&
+      status === "not_listening" &&
+      options.networkDir &&
+      options.belugaTmpDir &&
+      Date.now() - started >= 12_000
+    ) {
+      supplementalAttempted = true;
+      await tryStartSupplementalLocalFaucet(
+        options.networkDir,
+        options.belugaTmpDir,
+      );
+    }
+
     const proc = suiLocalnetRuntime.localNetworkProcess;
     if (proc?.killed) {
       return false;
@@ -156,6 +321,7 @@ export async function waitForLocalFaucetReady(
     if (
       suiLocalnetRuntime.localNetworkStartedAt &&
       !proc &&
+      !suiLocalnetRuntime.supplementalFaucetProcess &&
       Date.now() - suiLocalnetRuntime.localNetworkStartedAt > 1_500
     ) {
       return false;
@@ -165,16 +331,34 @@ export async function waitForLocalFaucetReady(
   return false;
 }
 
-function describeLocalFaucetStartupFailure(logs: string[]): string {
+async function describeLocalFaucetStartupFailure(
+  logs: string[],
+): Promise<string> {
   const knownFailure = describeLocalnetStartupFailure(logs);
   if (knownFailure) {
     return knownFailure;
   }
+
+  const portPids = await findListenerPidsOnPort(9123);
+  const status = await probeLocalFaucetStatus();
+  let diagnosis = "";
+  if (portPids.length === 0) {
+    diagnosis =
+      "Port 9123 is not listening — the Sui faucet process never started.";
+  } else if (status === "misconfigured") {
+    diagnosis =
+      "Port 9123 is listening but faucet requests fail (missing or invalid sui.keystore).";
+  } else if (status === "warming_up") {
+    diagnosis =
+      "Port 9123 is listening but faucet is not accepting fund requests yet.";
+  }
+
   return (
     "Sui localnet faucet did not become ready on http://127.0.0.1:9123. " +
     "Ika needs the faucet to fund its publisher address during bootstrap.\n\n" +
     "Press Reset in the Ika CLI panel, then Start again. " +
-    "If another Sui process is using port 9000 without a faucet, stop it first."
+    "If another Sui process is using port 9000 without a faucet, stop it first." +
+    (diagnosis ? `\n\nDiagnosis: ${diagnosis}` : "")
   );
 }
 
@@ -260,7 +444,11 @@ function buildSuiStartArgs(options: StartLocalNetworkOptions): string[] {
     resolveSuiLocalnetDir(options.forIka === true),
   ];
   if (options.withFaucet !== false) {
-    args.push("--with-faucet");
+    args.push(
+      process.platform === "win32"
+        ? "--with-faucet=127.0.0.1:9123"
+        : "--with-faucet",
+    );
   }
   if (options.fullnodeRpcPort) {
     args.push("--fullnode-rpc-port", String(options.fullnodeRpcPort));
@@ -268,12 +456,20 @@ function buildSuiStartArgs(options: StartLocalNetworkOptions): string[] {
   return args;
 }
 
-function spawnSuiLocalnetProcess(args: string[], belugaTmpDir: string) {
+function spawnSuiLocalnetProcess(
+  args: string[],
+  belugaTmpDir: string,
+  withFaucet: boolean,
+) {
   suiLocalnetRuntime.warnedUnmanagedSuiLogs = false;
+  const rustLog =
+    withFaucet && process.platform === "win32"
+      ? "off,sui_node=info,sui_faucet=info"
+      : "off,sui_node=info";
   const child = spawnWithLineBufferedLogs(resolveSuiBinary(), args, {
     env: {
       ...withBelugaTmpEnv(toolchainEnv(), belugaTmpDir),
-      RUST_LOG: "off,sui_node=info",
+      RUST_LOG: rustLog,
     },
   });
 
@@ -399,7 +595,12 @@ export async function startLocalNetwork(
   suiLocalnetRuntime.localNetworkStartedAt = Date.now();
   suiLocalnetRuntime.lastKnownRpcReady = false;
 
-  spawnSuiLocalnetProcess(buildSuiStartArgs(options), belugaTmpDir);
+  const withFaucet = options.withFaucet !== false;
+  if (withFaucet) {
+    await ensureLocalnetFaucetAssets(networkDir, requestedForIka);
+  }
+
+  spawnSuiLocalnetProcess(buildSuiStartArgs(options), belugaTmpDir, withFaucet);
 
   const ready = await waitForLocalRpcReady(120_000);
   if (!ready) {
@@ -415,13 +616,18 @@ export async function startLocalNetwork(
     );
   }
 
-  if (options.withFaucet !== false) {
+  if (withFaucet) {
     pushLog("Waiting for Sui faucet on port 9123…");
-    const faucetReady = await waitForLocalFaucetReady(90_000);
+    const faucetTimeoutMs = process.platform === "win32" ? 180_000 : 120_000;
+    const faucetReady = await waitForLocalFaucetReady(faucetTimeoutMs, {
+      networkDir,
+      belugaTmpDir,
+      trySupplemental: true,
+    });
     if (!faucetReady) {
       const recentLogs = getSuiLocalnetLogMessages();
       const recent = recentLogs.slice(-12).join("\n");
-      const message = describeLocalFaucetStartupFailure(recentLogs);
+      const message = await describeLocalFaucetStartupFailure(recentLogs);
       await stopLocalNetwork();
       throw new Error(
         recent ? `${message}\n\nRecent logs:\n${recent}` : message,
@@ -488,6 +694,8 @@ export async function forceStopLocalNetwork(): Promise<LocalNetworkStatus> {
 }
 
 export async function stopLocalNetwork(): Promise<LocalNetworkStatus> {
+  await stopSupplementalFaucet();
+
   if (suiLocalnetRuntime.localNetworkProcess && !suiLocalnetRuntime.localNetworkProcess.killed) {
     const pid = suiLocalnetRuntime.localNetworkProcess.pid;
     if (pid) {
@@ -538,6 +746,19 @@ export async function requestLocalFaucet(
 }
 
 export function cleanupLocalNetwork() {
+  if (
+    suiLocalnetRuntime.supplementalFaucetProcess &&
+    !suiLocalnetRuntime.supplementalFaucetProcess.killed
+  ) {
+    const pid = suiLocalnetRuntime.supplementalFaucetProcess.pid;
+    if (pid) {
+      void killPid(pid);
+    } else {
+      suiLocalnetRuntime.supplementalFaucetProcess.kill("SIGKILL");
+    }
+  }
+  suiLocalnetRuntime.supplementalFaucetProcess = null;
+
   if (suiLocalnetRuntime.localNetworkProcess && !suiLocalnetRuntime.localNetworkProcess.killed) {
     const pid = suiLocalnetRuntime.localNetworkProcess.pid;
     if (pid) {

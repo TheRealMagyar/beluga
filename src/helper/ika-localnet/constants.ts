@@ -33,4 +33,5 @@ export const IKA_FAUCET_FAILURE_HINT =
   "Ika could not fund its publisher address from the Sui localnet faucet. " +
   "Ika needs the faucet on http://127.0.0.1:9123 when bootstrapping contracts.\n\n" +
   "Try: Stop the localnet, press Reset in the Ika CLI panel, then Start again. " +
+  "On Windows, Beluga will also try to launch sui-faucet.exe if the embedded faucet does not start. " +
   "If Sui was started outside Beluga without --with-faucet, stop it and let Beluga start Sui.";

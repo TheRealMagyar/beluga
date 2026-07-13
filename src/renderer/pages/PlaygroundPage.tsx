@@ -4,6 +4,7 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import { useWallet } from "../components/Walletcontext";
 import { NetworkSwitcher } from "../components/NetworkSwitcher";
 import { DEFAULT_PLAYGROUND_FILES } from "../../helper/playground-defaults";
+import { shellCommandOutputLogLevel } from "../../helper/playground-cli";
 import type {
   ConsoleLog,
   PlaygroundBuildResult,
@@ -168,23 +169,37 @@ export function PlaygroundPage() {
           );
         }
         const result = await window.playground.runShellCommand(command);
-        if (result.stdout.trim()) {
-          for (const line of result.stdout.trim().split("\n")) {
-            addLog("info", line);
+        const stdoutText = result.stdout.trim();
+        const stderrText = result.stderr.trim();
+        const combinedOutput = [stdoutText, stderrText].filter(Boolean).join("\n");
+        const stdoutLevel = shellCommandOutputLogLevel(
+          result.exitCode,
+          "stdout",
+          combinedOutput,
+        );
+        const stderrLevel = shellCommandOutputLogLevel(
+          result.exitCode,
+          "stderr",
+          combinedOutput,
+        );
+
+        if (stdoutText) {
+          for (const line of stdoutText.split("\n")) {
+            addLog(stdoutLevel, line);
           }
         }
-        if (result.stderr.trim()) {
-          for (const line of result.stderr.trim().split("\n")) {
-            addLog(result.exitCode === 0 ? "info" : "error", line);
+        if (stderrText) {
+          for (const line of stderrText.split("\n")) {
+            addLog(stderrLevel, line);
           }
         }
-        if (
-          result.exitCode !== 0 &&
-          !result.stdout.trim() &&
-          !result.stderr.trim()
-        ) {
+        if (result.exitCode !== 0 && !stdoutText && !stderrText) {
           addLog("error", `Command failed with exit code ${result.exitCode}.`);
-        } else if (result.exitCode === 0 && !result.stdout.trim() && !result.stderr.trim()) {
+        } else if (
+          result.exitCode === 0 &&
+          !stdoutText &&
+          !stderrText
+        ) {
           addLog("success", "Command completed.");
         }
       } catch (e: unknown) {

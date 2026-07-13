@@ -8,6 +8,7 @@ import {
 
 export const suiLocalnetRuntime = {
   localNetworkProcess: null as ChildProcessWithoutNullStreams | null,
+  supplementalFaucetProcess: null as ChildProcessWithoutNullStreams | null,
   localNetworkStartedAt: null as number | null,
   localNetworkLogs: [] as StreamLogEntry[],
   lastKnownRpcReady: false,
