@@ -182,6 +182,14 @@ function installSuiViaSuiup(label = "Sui CLI (suiup)") {
   return runCommand("suiup", ["install", "sui@testnet", "-y"], label);
 }
 
+export async function installSuiForIkaPin(
+  pinnedTag: string,
+): Promise<InstallResult> {
+  const { suiupInstallSpecForTag } = await import("./ika-sui-version");
+  const spec = suiupInstallSpecForTag(pinnedTag);
+  return runCommand("suiup", ["install", spec, "-y"], `Sui CLI (${spec})`);
+}
+
 async function probeBinary(
   binary: string,
   args: string[] = ["--version"],

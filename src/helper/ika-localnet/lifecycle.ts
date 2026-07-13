@@ -15,6 +15,7 @@ import { spawnWithLineBufferedLogs } from "../localnet-process";
 import { refreshLocalNetworkStatus } from "../sui-client-manager";
 import { waitForLocalFaucetReady } from "../sui-localnet/network";
 import { getToolchainStatus, toolchainEnv } from "../sui-toolchain";
+import { ensureSuiMatchesIkaPin } from "../ika-sui-version";
 import {
   IKA_FAUCET_FAILURE_HINT,
   IKA_REPO_URL,
@@ -114,6 +115,22 @@ export async function startIkaLocalnet(
   await ensureIkaRepository();
   const repoPath = getIkaRepoPath();
 
+  const suiVersionCheck = await ensureSuiMatchesIkaPin({
+    autoInstall: true,
+    repoPath,
+  });
+  if (!suiVersionCheck.ok) {
+    throw new Error(suiVersionCheck.message);
+  }
+  if (suiVersionCheck.upgraded) {
+    pushIkaLog(
+      `Aligned Sui CLI to ${suiVersionCheck.requiredVersion} for Ika (${suiVersionCheck.requiredTag}).`,
+    );
+    pushIkaLog(
+      "If bootstrap still fails, press Reset in the Ika CLI panel to regenerate Sui genesis for this Sui version.",
+    );
+  }
+
   if (ikaLocalnetRuntime.ikaProcess?.pid && !ikaLocalnetRuntime.ikaProcess.killed) {
     await killIkaProcessTree(ikaLocalnetRuntime.ikaProcess.pid);
     ikaLocalnetRuntime.ikaProcess = null;
@@ -190,16 +207,23 @@ export async function startIkaLocalnet(
 
   const releaseBinary = getIkaBinaryPath();
   let command = "cargo";
+  const ikaSuiArgs = [
+    "--sui-fullnode-rpc-url",
+    "http://127.0.0.1:9000",
+    "--sui-faucet-url",
+    "http://127.0.0.1:9123/gas",
+  ];
   const startArgs = canResume
-    ? ["start"]
+    ? ["start", ...ikaSuiArgs]
     : useFreshBootstrap
       ? [
           "start",
           "--force-reinitiation",
           "--epoch-duration-ms",
           IKA_START_EPOCH_DURATION_MS,
+          ...ikaSuiArgs,
         ]
-      : ["start"];
+      : ["start", ...ikaSuiArgs];
   let args = [
     "run",
     "--bin",

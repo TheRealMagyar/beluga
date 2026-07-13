@@ -2,6 +2,7 @@ import {
   ensureBelugaToolchainWritable,
   resolveBelugaToolchainRoot,
 } from "./beluga-toolchain-path";
+import { ensureSuiMatchesIkaPin } from "./ika-sui-version";
 import {
   healIkaLocalnetEnvironment,
   needsIkaLocalnetHeal,
@@ -119,6 +120,23 @@ function buildStartMessage(
 export async function startIkaLocalnetStack(): Promise<IkaLocalnetStackActionResult> {
   const toolchainRoot = await ensureBelugaToolchainWritable();
   appendLocalNetworkLog(`Using toolchain at ${toolchainRoot}`);
+
+  const suiVersionCheck = await ensureSuiMatchesIkaPin({ autoInstall: true });
+  if (!suiVersionCheck.ok) {
+    throw new Error(suiVersionCheck.message);
+  }
+  if (suiVersionCheck.upgraded) {
+    appendLocalNetworkLog(
+      `Installed Sui ${suiVersionCheck.requiredVersion} (${suiVersionCheck.requiredTag}) for Ika compatibility.`,
+    );
+    appendLocalNetworkLog(
+      "Regenerating Sui genesis and clearing stale Ika state for the new Sui version…",
+    );
+    await stopIkaLocalnet();
+    await resetIkaLocalnetState();
+    await forceStopLocalNetwork();
+    await regenerateBelugaSuiGenesis({ forIka: true, withFaucet: true });
+  }
 
   const resume = await getLocalnetResumeStatus();
   let sui = await refreshLocalNetworkStatus();

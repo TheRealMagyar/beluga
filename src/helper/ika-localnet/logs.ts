@@ -8,6 +8,7 @@ import {
   IKA_FAUCET_FAILURE_HINT,
   IKA_MOVE_CACHE_HINT,
   IKA_PERMISSION_DENIED_HINT,
+  IKA_SUI_GRPC_FAILURE_HINT,
 } from "./constants";
 import {ikaLocalnetRuntime} from "./runtime";
 
@@ -55,6 +56,14 @@ export function isNetworkDkgReadyFromLogs(logs: string[]): boolean {
 
 export function detectIkaFatalStartupError(logs: string[]): string | null {
   const text = logs.join("\n");
+
+  if (
+    /grpc-status header missing/i.test(text) ||
+    (/HTTP status code 404/i.test(text) &&
+      /Operation is not implemented or not supported/i.test(text))
+  ) {
+    return IKA_SUI_GRPC_FAILURE_HINT;
+  }
 
   if (
     /Faucet request was unsuccessful/i.test(text) ||

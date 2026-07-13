@@ -35,3 +35,8 @@ export const IKA_FAUCET_FAILURE_HINT =
   "Try: Stop the localnet, press Reset in the Ika CLI panel, then Start again. " +
   "On Windows, Beluga will also try to launch sui-faucet.exe if the embedded faucet does not start. " +
   "If Sui was started outside Beluga without --with-faucet, stop it and let Beluga start Sui.";
+
+export const IKA_SUI_GRPC_FAILURE_HINT =
+  "Ika could not reach the Sui fullnode gRPC API (HTTP 404). " +
+  "This usually means the Sui CLI is older than Ika's pinned version (see Ika Cargo.toml, currently mainnet-v1.73.x).\n\n" +
+  "Open Packages → Toolchain and update Sui CLI via suiup, then press Reset in the Ika CLI panel and Start again.";
