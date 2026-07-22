@@ -103,13 +103,27 @@ export async function syncPlaygroundFiles(
 
 type ChainBuildEnv = "testnet" | "mainnet";
 
-function supportsBuildEnvFlag(version: string | null): boolean {
-  if (!version) return false;
+function parseSuiCliMajorMinor(version: string | null): {
+  major: number;
+  minor: number;
+} | null {
+  if (!version) return null;
   const match = version.match(/(\d+)\.(\d+)/);
-  if (!match) return false;
-  const major = Number(match[1]);
-  const minor = Number(match[2]);
-  return major > 1 || (major === 1 && minor >= 75);
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]) };
+}
+
+/** Sui 1.73+ requires `--build-env` when Move.toml targets localnet. */
+function supportsBuildEnvFlag(version: string | null): boolean {
+  const parsed = parseSuiCliMajorMinor(version);
+  if (!parsed) return true;
+  return (
+    parsed.major > 1 || (parsed.major === 1 && parsed.minor >= 73)
+  );
+}
+
+function needsBuildEnvRetry(message: string): boolean {
+  return /pass one of.*--build-env (testnet|mainnet)/i.test(message);
 }
 
 function resolveChainBuildEnv(activeEnv: string | null, localRunning: boolean): ChainBuildEnv {
@@ -206,17 +220,39 @@ export async function buildPlaygroundPackage(
   const workspace = await syncPlaygroundFiles(files);
   const binary = await getManagedSuiBinary();
   const { buildEnv, useBuildEnvFlag } = await prepareBuildEnvironment(cli.version);
+  let args = buildArgs(workspace, buildEnv, useBuildEnvFlag);
+
+  const runBuild = async (buildArgsList: string[]) =>
+    execFileAsync(binary, buildArgsList, {
+      timeout: 300_000,
+      maxBuffer: 20 * 1024 * 1024,
+      env: toolchainEnv(),
+    });
 
   try {
-    const { stdout, stderr } = await execFileAsync(
-      binary,
-      buildArgs(workspace, buildEnv, useBuildEnvFlag),
-      {
-        timeout: 300_000,
-        maxBuffer: 20 * 1024 * 1024,
-        env: toolchainEnv(),
-      },
-    );
+    let stdout = "";
+    let stderr = "";
+    try {
+      ({ stdout, stderr } = await runBuild(args));
+    } catch (firstErr: unknown) {
+      const firstErrRecord = firstErr as {
+        stderr?: { toString?: () => string };
+        stdout?: { toString?: () => string };
+      };
+      const firstMessage = [
+        firstErr instanceof Error ? firstErr.message : String(firstErr),
+        firstErrRecord.stderr?.toString?.() ?? "",
+        firstErrRecord.stdout?.toString?.() ?? "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      if (!useBuildEnvFlag && needsBuildEnvRetry(firstMessage)) {
+        args = buildArgs(workspace, buildEnv, true);
+        ({ stdout, stderr } = await runBuild(args));
+      } else {
+        throw firstErr;
+      }
+    }
 
     const combined = `${stdout}\n${stderr}`.trim();
     const jsonLine = combined

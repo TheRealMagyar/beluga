@@ -14,6 +14,9 @@ import ToolsPage from "./pages/ToolsPage";
 import SkillsPage from "./pages/SkillsPage";
 import LearningPage from "./pages/LearningPage";
 import ConsolePage from "./pages/ConsolePage";
+import { TradingChartsPage } from "./pages/TradingChartsPage";
+import { TradingFeedsPage } from "./pages/TradingFeedsPage";
+import { TradingStrategyPage } from "./pages/TradingStrategyPage";
 import { WalletProvider } from "./components/Walletcontext";
 import { useMcpHandler } from "./hooks/useMcpHandler";
 import { PackagesActivityProvider } from "./context/PackagesActivityContext";
@@ -141,6 +144,15 @@ function MainContent({
       </div>
       <div className={pathname === "/tools" ? "h-full" : "hidden"}>
         <ToolsPage />
+      </div>
+      <div className={pathname === "/charts" ? "h-full" : "hidden"}>
+        <TradingChartsPage />
+      </div>
+      <div className={pathname === "/strategy" ? "h-full" : "hidden"}>
+        <TradingStrategyPage />
+      </div>
+      <div className={pathname === "/feeds" ? "h-full" : "hidden"}>
+        <TradingFeedsPage />
       </div>
       {pathname === "/settings" && <SettingsPage />}
       {pathname === "/docs" && <DocsPage />}

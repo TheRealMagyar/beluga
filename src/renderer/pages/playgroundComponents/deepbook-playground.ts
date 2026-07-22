@@ -187,6 +187,10 @@ export async function placeDeepBookLimitOrder(
   return signAndExecuteTransaction(suiClient, address, tx, network, signerId);
 }
 
+/** Dummy address for read-only DeepBook queries (midPrice / orderbook). */
+export const DEEPBOOK_READONLY_ADDRESS =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+
 export async function fetchDeepBookMidPrice(
   address: string,
   network: DeepBookNetwork,
@@ -195,6 +199,67 @@ export async function fetchDeepBookMidPrice(
 ) {
   const db = createDeepBookClient(address, network, balanceManagerId);
   return db.midPrice(poolKey);
+}
+
+/** Mid price without a connected wallet (uses a read-only dummy address). */
+export async function fetchDeepBookMidPriceReadonly(
+  network: DeepBookNetwork,
+  poolKey: string,
+  address?: string | null,
+) {
+  return fetchDeepBookMidPrice(
+    address || DEEPBOOK_READONLY_ADDRESS,
+    network,
+    poolKey,
+  );
+}
+
+/** Prefer a USD-quoted pool for a coin ticker (e.g. WAL → WAL_USDC). */
+export function resolveDeepBookPoolForCoin(
+  network: DeepBookNetwork,
+  coinOrPoolKey: string,
+): { key: string; baseCoin: string; quoteCoin: string } | null {
+  const raw = coinOrPoolKey.trim().toUpperCase().replace(/^DB:/, "");
+  const pools = listDeepBookPools(network);
+  const exact = pools.find((p) => p.key.toUpperCase() === raw);
+  if (exact) {
+    return {
+      key: exact.key,
+      baseCoin: exact.baseCoin,
+      quoteCoin: exact.quoteCoin,
+    };
+  }
+
+  const usdQuote = /^(USDC|USDT|USD|AUSD|DBUSDC|DBUSDT|WUSDC|WUSDT)$/i;
+  const byBaseUsd =
+    pools.find(
+      (p) =>
+        p.baseCoin.toUpperCase() === raw && usdQuote.test(p.quoteCoin),
+    ) ||
+    pools.find(
+      (p) =>
+        p.quoteCoin.toUpperCase() === raw && usdQuote.test(p.baseCoin),
+    );
+  if (byBaseUsd) {
+    return {
+      key: byBaseUsd.key,
+      baseCoin: byBaseUsd.baseCoin,
+      quoteCoin: byBaseUsd.quoteCoin,
+    };
+  }
+
+  const byBase = pools.find(
+    (p) =>
+      p.baseCoin.toUpperCase() === raw || p.quoteCoin.toUpperCase() === raw,
+  );
+  if (byBase) {
+    return {
+      key: byBase.key,
+      baseCoin: byBase.baseCoin,
+      quoteCoin: byBase.quoteCoin,
+    };
+  }
+  return null;
 }
 
 export async function fetchDeepBookLevel2(

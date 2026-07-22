@@ -574,6 +574,43 @@ export const PACKAGES_TOOLS: BelugaToolDefinition[] = [
 
 export const BELUGA_APP_TOOLS: BelugaToolDefinition[] = [
   {
+    name: "market_get_news",
+    description:
+      "Latest crypto headlines (CoinDesk, Cointelegraph, etc.) with impact hints and related assets. For trading / macro context.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Max headlines (default 20)" },
+      },
+    },
+  },
+  {
+    name: "market_get_calendar",
+    description:
+      "Economic calendar (FOMC, CPI, NFP, etc.) with time-to-event and crypto market impact hints.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        hours: { type: "number", description: "Lookahead hours (default 72)" },
+        highImpactOnly: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "market_assess_headline",
+    description:
+      "Assess a news headline for market impact and trading notes. Optional body + assetHint improve scoring.",
+    inputSchema: {
+      type: "object",
+      required: ["headline"],
+      properties: {
+        headline: { type: "string" },
+        body: { type: "string" },
+        assetHint: { type: "string" },
+      },
+    },
+  },
+  {
     name: "tool_scan_token",
     description: "Scan a Sui token for mint authority, upgrades, and risk signals.",
     inputSchema: {

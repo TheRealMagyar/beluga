@@ -56,6 +56,9 @@ export const CONFIG = {
     learningIcon: graduationSvg,
     settingsIcon: cogwheelSvg,
     walletIcon: walletSvg,
+    chartsIcon: toolsSvg,
+    strategyIcon: skillsSvg,
+    feedIcon: linkSvg,
     backgroundcolor: "#202020",
   },
   settingsPage: {

@@ -1,6 +1,7 @@
 import {
   BELUGA_ALL_TOOLS,
   toXaiResponsesTools,
+  type BelugaToolDefinition,
 } from "./beluga-tool-catalog";
 import { executeBelugaTool } from "./beluga-tool-runner";
 import { normalizeApiKey, validateApiKeyFormat } from "./ai-api-key";
@@ -377,10 +378,20 @@ async function streamAiChatAgentic(params: {
   messages: AiChatMessage[];
   signal?: AbortSignal;
   callbacks: AiStreamCallbacks;
+  /** Override default Beluga MCP tools (e.g. trading agent). */
+  tools?: BelugaToolDefinition[];
+  executeTool?: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ text: string }>;
 }): Promise<void> {
-  const tools = toXaiResponsesTools(BELUGA_ALL_TOOLS);
+  const tools = toXaiResponsesTools(params.tools ?? BELUGA_ALL_TOOLS);
   const conversation = [...params.messages];
   const totalUsage = { promptTokens: 0, completionTokens: 0 };
+  const runTool =
+    params.executeTool ??
+    ((name: string, args: Record<string, unknown>) =>
+      executeBelugaTool(name, args));
 
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
     const result = await requestResponses({
@@ -397,6 +408,11 @@ async function streamAiChatAgentic(params: {
     }
 
     if (result.toolCalls.length > 0) {
+      // Stream intermediate reasoning text if the model narrated before tools
+      if (result.content?.trim()) {
+        params.callbacks.onChunk(result.content.trim() + "\n");
+      }
+
       conversation.push({
         role: "assistant",
         content: result.content || null,
@@ -416,10 +432,7 @@ async function streamAiChatAgentic(params: {
             argsDisplay,
           );
 
-          const toolResult = await executeBelugaTool(
-            tc.function.name,
-            parsedArgs,
-          );
+          const toolResult = await runTool(tc.function.name, parsedArgs);
           params.callbacks.onToolResult(
             tc.id,
             tc.function.name,
@@ -518,8 +531,22 @@ export async function streamAiChat(params: {
   allowToolUse?: boolean;
   signal?: AbortSignal;
   callbacks: AiStreamCallbacks;
+  tools?: BelugaToolDefinition[];
+  executeTool?: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ text: string }>;
 }): Promise<void> {
-  const { apiKey, model, messages, allowToolUse, signal, callbacks } = params;
+  const {
+    apiKey,
+    model,
+    messages,
+    allowToolUse,
+    signal,
+    callbacks,
+    tools,
+    executeTool,
+  } = params;
 
   const normalized = normalizeApiKey(apiKey);
   if (!isBearerToken(normalized)) {
@@ -538,6 +565,8 @@ export async function streamAiChat(params: {
         messages,
         signal,
         callbacks,
+        tools,
+        executeTool,
       });
       return;
     }
@@ -553,4 +582,97 @@ export async function streamAiChat(params: {
     if (signal?.aborted) return;
     callbacks.onError(err instanceof Error ? err.message : "Request error.");
   }
+}
+
+export function buildTradingAgentSystemPrompt(opts: {
+  strategyBlock: string;
+  market: string;
+  timeframe: string;
+  sessionPlan: string;
+  /** analysis = no trades; demo = virtual account real prices; live = T2000 chain */
+  mode?: "analysis" | "demo" | "live";
+  paperMode?: boolean;
+  demoHint?: string;
+  hasMemory?: boolean;
+  memoryLabels?: string;
+  recallBootstrap?: string;
+}): string {
+  const mode =
+    opts.mode ||
+    (opts.paperMode ? "analysis" : "live");
+
+  const modeBlock =
+    mode === "demo"
+      ? `- MODE: DEMO paper-trading on a virtual account (default 100 SUI, real Pyth prices).
+- Trades via trade_open_long / trade_open_short / trade_swap ARE simulated fills — do them when strategy says so.
+- Call trade_get_demo_account after every fill and each tick start to know balances.
+- NO on-chain txs. Starting bag is mostly SUI — short/sell SUI→USDC first if you need USDC to long.
+${opts.demoHint ? `- Account snapshot: ${opts.demoHint}` : ""}`
+      : mode === "analysis"
+        ? "- MODE: analysis only — do NOT call open_long/short/swap (still quote & analyze)."
+        : "- MODE: LIVE trading via T2000 wallet — real swaps/NAVI.";
+
+  const memoryBlock = opts.hasMemory
+    ? `## Walrus Memory (linked to this strategy)
+Fragments: ${opts.memoryLabels || "linked"}
+Storage uses a **strategy-specific namespace** (strategy-…), never "default".
+Target is always **on-chain Walrus**. If uploads are temporarily paused (503), notes are queued and auto-flushed on-chain when the relayer accepts again — keep calling trade_remember.
+- trade_recall(query) — load past lessons before acting
+- trade_remember(text, kind) — persist observations (kinds: observation | improvement | mistake | outcome | setup | risk)
+You MUST call tools for memory — do not only write thoughts:
+1. Early ticks: trade_recall("past SUI scalp mistakes and good setups")
+2. After EVERY filled long/short/swap: trade_remember with kind=outcome
+3. After mistakes: trade_remember kind=mistake
+4. Improvements: trade_remember kind=improvement
+5. Before trade_stop: trade_remember kind=outcome postmortem
+If trade_remember returns ok:false, report the error in trade_think.
+Demo fills may also auto-save into the same strategy namespace.`
+    : `## Walrus Memory
+No memory fragment is linked. You cannot trade_remember. Tell the user (via trade_think) to link one memory on Strategy → Link memory.`;
+
+  return `You are Beluga Trading Agent — an autonomous AI trader in the Beluga desktop app.
+
+## Mission
+Execute the loaded strategy on the live chart market using real market data. Plan ahead, open/close exposure, schedule your next review tick, and write lasting lessons to Walrus memory when linked.
+
+## Loaded strategy
+${opts.strategyBlock || "(none — trade conservatively / wait)"}
+
+## Current chart focus
+- Market: ${opts.market}
+- Timeframe preference: ${opts.timeframe}
+${modeBlock}
+
+${memoryBlock}
+
+## Persistent plan (from previous ticks)
+${opts.sessionPlan || "(empty — create one with trade_update_plan)"}
+
+${opts.recallBootstrap ? `## Memory bootstrap (auto-recalled)\n${opts.recallBootstrap}\n` : ""}
+
+## Operating loop (each tick)
+1. trade_think — narrate observations for the user log
+2. If memory linked and needed: trade_recall
+3. Before volatile windows: market_get_calendar (high impact) and/or market_get_news
+4. trade_analyze_market and/or trade_get_price (+ trade_get_demo_account if DEMO)
+5. Compare to strategy entry/exit rules, SL/TP (+ recalled lessons + news calendar)
+6. trade_update_plan — multi-step forward plan
+7. Act if rules + risk align (trade_open_long / trade_open_short / trade_swap)
+8. trade_remember after fills / mistakes / improvements
+9. End with trade_schedule_next (15–30s for 1s scalp demo) or trade_stop (+ remember postmortem)
+
+## News / calendar
+- market_get_calendar — know when Fed/CPI/NFP etc. hit and crypto impact hints
+- market_get_news — live crypto headlines with impact tags
+- market_assess_headline — score a specific headline
+- Stand aside or cut size into high-impact releases if scalping.
+
+## Risk
+- Respect strategy stopLoss / takeProfit %
+- Prefer 5–15% of equity per idea in demo
+- Never invent prices — always use tools
+- Call trade_think before every trade action
+
+## Style
+Be concise, decisive, structured. User reads your thoughts + tool calls in the Agent Log.`;
 }

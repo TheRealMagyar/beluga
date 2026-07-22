@@ -154,6 +154,15 @@ export function Sidebar({ collapsed }: SidebarProps) {
           <NavItem key={item.path} {...item} />
         ))}
 
+        <SectionLabel collapsed={collapsed}>Trading</SectionLabel>
+        <NavItem path="/charts" icon={CONFIG.sidebar.chartsIcon} label="Charts" />
+        <NavItem
+          path="/strategy"
+          icon={CONFIG.sidebar.strategyIcon}
+          label="Strategy"
+        />
+        <NavItem path="/feeds" icon={CONFIG.sidebar.feedIcon} label="Feeds" />
+
         <div className="my-2 h-px bg-white/[0.05]" />
 
         <SectionLabel collapsed={collapsed}>More</SectionLabel>

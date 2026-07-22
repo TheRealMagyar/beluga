@@ -30,6 +30,7 @@ import { registerSettingsIpc } from "./settings";
 import { registerToolsIpc } from "./tools";
 import { registerWalletIpc } from "./wallet";
 import { registerGitHubIpc } from "./github";
+import { registerFeedsIpc } from "./feeds";
 
 function broadcastToolchainProgress(progress: ToolchainProgressEvent) {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -80,6 +81,7 @@ export function registerAllIpc(ctx: MainIpcContext = createMainIpcContext()) {
   registerGitHubIpc(ctx);
   registerAiIpc(ctx);
   registerWalletIpc(ctx);
+  registerFeedsIpc(ctx);
   registerFsIpc(ctx);
   registerToolsIpc();
   registerPackagesIpc(ctx);

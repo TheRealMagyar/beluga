@@ -93,6 +93,14 @@ contextBridge.exposeInMainWorld('sui', {
   swapQuote:        (params: any) => ipcRenderer.invoke('sui:swapQuote', params),
   pay:              (params: any) => ipcRenderer.invoke('sui:pay', params),
   resolveRecipient: (input: any)  => ipcRenderer.invoke('sui:resolveRecipient', input),
+  // NAVI / trade (T2000 agent)
+  naviSave:       (params: any) => ipcRenderer.invoke('sui:naviSave', params),
+  naviWithdraw:   (params: any) => ipcRenderer.invoke('sui:naviWithdraw', params),
+  naviBorrow:     (params: any) => ipcRenderer.invoke('sui:naviBorrow', params),
+  naviRepay:      (params: any) => ipcRenderer.invoke('sui:naviRepay', params),
+  naviPositions:  ()            => ipcRenderer.invoke('sui:naviPositions'),
+  naviHealth:     ()            => ipcRenderer.invoke('sui:naviHealth'),
+  openTrade:      (params: any) => ipcRenderer.invoke('sui:openTrade', params),
 });
 
 contextBridge.exposeInMainWorld('fs', {
@@ -182,6 +190,67 @@ contextBridge.exposeInMainWorld('belugaAi', {
     messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
     pageContext?: string;
   }) => ipcRenderer.invoke('ai:chat', params),
+  tradingAgentTick: (params: {
+    requestId: string;
+    sessionId: string;
+    strategyBlock: string;
+    market: string;
+    timeframe: string;
+    mode?: 'analysis' | 'demo' | 'live';
+    paperMode?: boolean;
+    userMessage?: string;
+    strategyId?: string;
+    memoryCredentials?: Array<{
+      entryId: string;
+      label: string;
+      accountId: string;
+      delegateKey: string;
+      network: 'mainnet' | 'testnet';
+      namespace: string;
+    }>;
+    stopLossPct?: number;
+    takeProfitPct?: number;
+  }) => ipcRenderer.invoke('ai:trading-agent-tick', params),
+  tradingChartAnnotations: (params?: { market?: string }) =>
+    ipcRenderer.invoke('ai:trading-chart-annotations', params ?? {}),
+  tradingAgentStartDemo: (params: { sessionId: string; initialSui?: number }) =>
+    ipcRenderer.invoke('ai:trading-agent-start-demo', params),
+  tradingAgentDemoSummary: (sessionId: string) =>
+    ipcRenderer.invoke('ai:trading-agent-demo-summary', { sessionId }),
+  tradingAgentDemoSnapshot: (sessionId: string) =>
+    ipcRenderer.invoke('ai:trading-agent-demo-snapshot', { sessionId }),
+  tradingAgentRemember: (params: {
+    sessionId: string;
+    text: string;
+    kind?: string;
+    strategyId?: string;
+    memoryCredentials?: Array<{
+      entryId: string;
+      label: string;
+      accountId: string;
+      delegateKey: string;
+      network: 'mainnet' | 'testnet';
+      namespace: string;
+    }>;
+  }) => ipcRenderer.invoke('ai:trading-agent-remember', params),
+  tradingMemoryAnalyze: (params: {
+    requestId: string;
+    strategyBlock: string;
+    strategyName?: string;
+    memoryCredentials: Array<{
+      entryId: string;
+      label: string;
+      accountId: string;
+      delegateKey: string;
+      network: 'mainnet' | 'testnet';
+      namespace: string;
+    }>;
+    withAiSummary?: boolean;
+  }) => ipcRenderer.invoke('ai:trading-memory-analyze', params),
+  tradingAgentReset: (sessionId: string) =>
+    ipcRenderer.invoke('ai:trading-agent-reset', { sessionId }),
+  tradingAgentSession: (sessionId: string) =>
+    ipcRenderer.invoke('ai:trading-agent-session', { sessionId }),
   abort: (requestId: string) => ipcRenderer.invoke('ai:abort', { requestId }),
   onStreamChunk: (
     callback: (payload: { requestId: string; delta: string }) => void,
@@ -195,6 +264,14 @@ contextBridge.exposeInMainWorld('belugaAi', {
     callback: (payload: {
       requestId: string;
       usage: { promptTokens: number; completionTokens: number } | null;
+      impactAssessment?: Record<string, unknown>;
+      tradingMeta?: {
+        sessionId: string;
+        nextTickSeconds: number | null;
+        stopped: boolean;
+        plan: string;
+        demoMode?: boolean;
+      };
     }) => void,
   ) => {
     const handler = (_event: unknown, payload: Parameters<typeof callback>[0]) =>
@@ -203,7 +280,11 @@ contextBridge.exposeInMainWorld('belugaAi', {
     return () => ipcRenderer.removeListener('ai:stream-done', handler);
   },
   onStreamError: (
-    callback: (payload: { requestId: string; message: string }) => void,
+    callback: (payload: {
+      requestId: string;
+      message: string;
+      impactAssessment?: Record<string, unknown>;
+    }) => void,
   ) => {
     const handler = (_event: unknown, payload: Parameters<typeof callback>[0]) =>
       callback(payload);
@@ -622,4 +703,42 @@ contextBridge.exposeInMainWorld('playground', {
       ipcRenderer.removeListener('localnet:logs', handler);
     };
   },
+});
+
+contextBridge.exposeInMainWorld('tradingFeeds', {
+  snapshot: (params?: {
+    newsLimit?: number;
+    calendarHours?: number;
+    customEndpoints?: Array<{
+      id: string;
+      name: string;
+      url: string;
+      type: 'rss' | 'json';
+      jsonPath?: string;
+      titleKey?: string;
+      linkKey?: string;
+      summaryKey?: string;
+      dateKey?: string;
+      enabled?: boolean;
+    }>;
+  }) => ipcRenderer.invoke('feeds:snapshot', params ?? {}),
+  cryptoNews: (params?: { limitPerSource?: number }) =>
+    ipcRenderer.invoke('feeds:crypto-news', params ?? {}),
+  economicCalendar: () => ipcRenderer.invoke('feeds:economic-calendar'),
+  xWatchlist: () => ipcRenderer.invoke('feeds:x-watchlist'),
+  assessImpact: (params: {
+    headline: string;
+    body?: string;
+    assetHint?: string;
+  } | string) =>
+    ipcRenderer.invoke(
+      'feeds:assess-impact',
+      typeof params === 'string' ? { headline: params } : params,
+    ),
+  assessImpactAi: (params: {
+    headline: string;
+    body?: string;
+    assetHint?: string;
+    requestId: string;
+  }) => ipcRenderer.invoke('feeds:assess-impact-ai', params),
 });

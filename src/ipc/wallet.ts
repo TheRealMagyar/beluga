@@ -365,4 +365,243 @@ export function registerWalletIpc(ctx: MainIpcContext) {
       };
     }
   });
+
+  // ── NAVI lending (collateral / borrow — used for leveraged long/short) ──
+
+  ipcMain.handle(
+    "sui:naviSave",
+    async (
+      _,
+      {
+        amount,
+        asset = "USDC",
+      }: { amount: number | "all"; asset?: string },
+    ) => {
+      try {
+        const agent = (await ctx.getAgent()) as {
+          save: (opts: {
+            amount: number | "all";
+            asset?: string;
+          }) => Promise<unknown>;
+        };
+        const result = await agent.save({ amount, asset });
+        return { success: true, result };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "sui:naviWithdraw",
+    async (
+      _,
+      {
+        amount,
+        asset = "USDC",
+      }: { amount: number | "all"; asset?: string },
+    ) => {
+      try {
+        const agent = (await ctx.getAgent()) as {
+          withdraw: (opts: {
+            amount: number | "all";
+            asset?: string;
+          }) => Promise<unknown>;
+        };
+        const result = await agent.withdraw({ amount, asset });
+        return { success: true, result };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "sui:naviBorrow",
+    async (
+      _,
+      { amount, asset = "USDC" }: { amount: number; asset?: string },
+    ) => {
+      try {
+        const agent = (await ctx.getAgent()) as {
+          borrow: (opts: {
+            amount: number;
+            asset?: string;
+          }) => Promise<unknown>;
+        };
+        const result = await agent.borrow({ amount, asset });
+        return { success: true, result };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "sui:naviRepay",
+    async (
+      _,
+      {
+        amount,
+        asset = "USDC",
+      }: { amount: number | "all"; asset?: string },
+    ) => {
+      try {
+        const agent = (await ctx.getAgent()) as {
+          repay: (opts: {
+            amount: number | "all";
+            asset?: string;
+          }) => Promise<unknown>;
+        };
+        const result = await agent.repay({ amount, asset });
+        return { success: true, result };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle("sui:naviPositions", async () => {
+    try {
+      const agent = (await ctx.getAgent()) as {
+        positions: () => Promise<unknown>;
+      };
+      const result = await agent.positions();
+      return { success: true, result };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  ipcMain.handle("sui:naviHealth", async () => {
+    try {
+      const agent = (await ctx.getAgent()) as {
+        healthFactor: () => Promise<unknown>;
+        maxBorrow: () => Promise<unknown>;
+      };
+      const [health, maxBorrow] = await Promise.all([
+        agent.healthFactor(),
+        agent.maxBorrow().catch(() => null),
+      ]);
+      return { success: true, health, maxBorrow };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  /**
+   * Open a long/short style trade via T2000 agent:
+   * - long:  optional NAVI borrow USDC → swap USDC → market
+   * - short: optional NAVI borrow market → swap market → USDC
+   * Spot (no leverage): just the swap leg.
+   */
+  ipcMain.handle(
+    "sui:openTrade",
+    async (
+      _,
+      {
+        side,
+        market,
+        amount,
+        slippage = 1,
+        leverage = 1,
+        quoteAsset = "USDC",
+      }: {
+        side: "long" | "short";
+        market: string;
+        amount: string;
+        slippage?: number;
+        leverage?: number;
+        quoteAsset?: string;
+      },
+    ) => {
+      try {
+        const agent = (await ctx.getAgent()) as {
+          borrow: (opts: {
+            amount: number;
+            asset?: string;
+          }) => Promise<unknown>;
+          swap: (opts: {
+            from: string;
+            to: string;
+            amount: number;
+            slippage?: number;
+          }) => Promise<unknown>;
+        };
+
+        const size = Number(amount);
+        if (!Number.isFinite(size) || size <= 0) {
+          return { success: false, error: "Invalid amount" };
+        }
+
+        const lev = Math.min(Math.max(Number(leverage) || 1, 1), 5);
+        const steps: Array<{ step: string; result: unknown }> = [];
+
+        if (side === "long") {
+          // Spend `size` quote (USDC) to buy market. Extra (lev-1)*size borrowed if lev > 1.
+          let spend = size;
+          if (lev > 1) {
+            const borrowAmt = size * (lev - 1);
+            const borrowRes = await agent.borrow({
+              amount: borrowAmt,
+              asset: quoteAsset,
+            });
+            steps.push({ step: "borrow", result: borrowRes });
+            spend = size * lev;
+          }
+          const swapRes = await agent.swap({
+            from: quoteAsset,
+            to: market,
+            amount: spend,
+            slippage,
+          });
+          steps.push({ step: "swap", result: swapRes });
+          return { success: true, side, market, leverage: lev, steps };
+        }
+
+        // short: sell market for quote. With lev>1 borrow market first then sell total.
+        let sell = size;
+        if (lev > 1) {
+          const borrowAmt = size * (lev - 1);
+          const borrowRes = await agent.borrow({
+            amount: borrowAmt,
+            asset: market,
+          });
+          steps.push({ step: "borrow", result: borrowRes });
+          sell = size * lev;
+        }
+        const swapRes = await agent.swap({
+          from: market,
+          to: quoteAsset,
+          amount: sell,
+          slippage,
+        });
+        steps.push({ step: "swap", result: swapRes });
+        return { success: true, side, market, leverage: lev, steps };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
 }

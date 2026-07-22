@@ -28,6 +28,10 @@ import { executeGrpcQuery, listGrpcQueryCatalog } from "./grpc-query";
 import { fetchAddressGraph } from "./tx-visualizer";
 import { scanToken } from "./token-scanner";
 import {
+  assessHeadlineImpact,
+  getMarketFeedSnapshot,
+} from "./trading-news-feeds";
+import {
   buildTokenPackage,
   type TokenGeneratorConfig,
 } from "./token-generator";
@@ -139,6 +143,9 @@ const EXTENDED_TOOL_NAMES = new Set([
   "packages_create_custom",
   "packages_update_custom",
   "packages_delete_custom",
+  "market_get_news",
+  "market_get_calendar",
+  "market_assess_headline",
   "tool_scan_token",
   "tool_build_token_package",
   "tool_build_nft_package",
@@ -719,6 +726,70 @@ export async function executeExtendedBelugaTool(
         );
         return {
           text: `✅ Project packages: ${config.packages.join(", ") || "(none)"}`,
+          isError: false,
+        };
+      }
+
+      case "market_get_news": {
+        const limit = Math.min(Math.max(Number(args?.limit) || 20, 5), 40);
+        const snap = await getMarketFeedSnapshot({ newsLimit: 8 });
+        return {
+          text: JSON.stringify(
+            {
+              fetchedAt: snap.fetchedAt,
+              errors: snap.newsErrors,
+              items: snap.news.slice(0, limit),
+            },
+            null,
+            2,
+          ),
+          isError: false,
+        };
+      }
+
+      case "market_get_calendar": {
+        const hours = Math.min(Math.max(Number(args?.hours) || 72, 6), 168);
+        const snap = await getMarketFeedSnapshot({ calendarHours: hours });
+        let events = snap.calendar;
+        if (args?.highImpactOnly) {
+          events = events.filter((e) => /high/i.test(e.impact));
+        }
+        return {
+          text: JSON.stringify(
+            {
+              fetchedAt: snap.fetchedAt,
+              error: snap.calendarError,
+              upcomingHighImpact: snap.upcomingHighImpact,
+              events,
+              xWatchlist: snap.xWatchlist,
+            },
+            null,
+            2,
+          ),
+          isError: false,
+        };
+      }
+
+      case "market_assess_headline": {
+        const headline = String(args?.headline || "").trim();
+        if (!headline) {
+          return { text: "❌ headline required", isError: true };
+        }
+        return {
+          text: JSON.stringify(
+            assessHeadlineImpact({
+              headline,
+              body: args?.body != null ? String(args.body) : undefined,
+              assetHint:
+                args?.assetHint != null
+                  ? String(args.assetHint)
+                  : args?.asset != null
+                    ? String(args.asset)
+                    : undefined,
+            }),
+            null,
+            2,
+          ),
           isError: false,
         };
       }

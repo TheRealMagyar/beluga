@@ -17,6 +17,20 @@ interface SuiAPI {
   resolveRecipient: (input: string) => Promise<{ success: boolean; resolved: any } | null>
   swapQuote: (params: { from: string; to: string; amount: string }) => Promise<{ success: boolean; quote: any; error?: string }>
   swap: (params: { from: string; to: string; amount: string; slippage: number }) => Promise<{ success: boolean; result: any; error?: string }>
+  naviSave: (params: { amount: number | 'all'; asset?: string }) => Promise<{ success: boolean; result?: any; error?: string }>
+  naviWithdraw: (params: { amount: number | 'all'; asset?: string }) => Promise<{ success: boolean; result?: any; error?: string }>
+  naviBorrow: (params: { amount: number; asset?: string }) => Promise<{ success: boolean; result?: any; error?: string }>
+  naviRepay: (params: { amount: number | 'all'; asset?: string }) => Promise<{ success: boolean; result?: any; error?: string }>
+  naviPositions: () => Promise<{ success: boolean; result?: { positions: Array<{ protocol: string; asset: string; type: 'save' | 'borrow'; amount: number; amountUsd?: number; apy: number }> }; error?: string }>
+  naviHealth: () => Promise<{ success: boolean; health?: { healthFactor: number; supplied: number; borrowed: number; maxBorrow: number }; maxBorrow?: { maxAmount: number } | null; error?: string }>
+  openTrade: (params: {
+    side: 'long' | 'short'
+    market: string
+    amount: string
+    slippage?: number
+    leverage?: number
+    quoteAsset?: string
+  }) => Promise<{ success: boolean; side?: string; market?: string; leverage?: number; steps?: any[]; error?: string }>
 }
 
 interface Window {
@@ -1203,6 +1217,136 @@ interface Window {
       ika: StreamLogEntry[];
     }>;
   };
+  tradingFeeds: {
+    snapshot: (params?: {
+      newsLimit?: number;
+      calendarHours?: number;
+      customEndpoints?: Array<{
+        id: string;
+        name: string;
+        url: string;
+        type: 'rss' | 'json';
+        jsonPath?: string;
+        titleKey?: string;
+        linkKey?: string;
+        summaryKey?: string;
+        dateKey?: string;
+        enabled?: boolean;
+      }>;
+    }) => Promise<{
+      ok: boolean;
+      error?: string;
+      news?: Array<{
+        id: string;
+        title: string;
+        link: string;
+        source: string;
+        publishedAt: string | null;
+        summary: string;
+        tags: string[];
+        impactHint: 'high' | 'medium' | 'low' | 'unknown';
+        assets: string[];
+      }>;
+      newsErrors?: string[];
+      calendar?: Array<{
+        id: string;
+        title: string;
+        country: string;
+        date: string;
+        impact: string;
+        forecast: string;
+        previous: string;
+        actual?: string;
+        minutesUntil: number;
+        marketHint: string;
+      }>;
+      upcomingHighImpact?: Array<{
+        id: string;
+        title: string;
+        country: string;
+        date: string;
+        impact: string;
+        forecast: string;
+        previous: string;
+        minutesUntil: number;
+        marketHint: string;
+      }>;
+      xWatchlist?: Array<{
+        handle: string;
+        name: string;
+        focus: string;
+        relevance: 'high' | 'medium';
+        url: string;
+      }>;
+      fetchedAt?: number;
+      calendarError?: string;
+    }>;
+    cryptoNews: (params?: {
+      limitPerSource?: number;
+    }) => Promise<{ ok: boolean; items?: unknown[]; errors?: string[] }>;
+    economicCalendar: () => Promise<{ ok: boolean; events?: unknown[] }>;
+    xWatchlist: () => Promise<{ ok: boolean; accounts?: unknown[] }>;
+    assessImpact: (
+      params:
+        | string
+        | {
+            headline: string;
+            body?: string;
+            assetHint?: string;
+          },
+    ) => Promise<{
+      ok: boolean;
+      impact?: string;
+      score?: number;
+      direction?: string;
+      confidence?: number;
+      assets?: string[];
+      catalysts?: string[];
+      timeHorizon?: string;
+      volatility?: string;
+      summary?: string;
+      tradingNotes?: string[];
+      mode?: string;
+      error?: string;
+    }>;
+    assessImpactAi: (params: {
+      headline: string;
+      body?: string;
+      assetHint?: string;
+      requestId: string;
+    }) => Promise<{
+      ok: boolean;
+      impact?: string;
+      score?: number;
+      direction?: string;
+      confidence?: number;
+      assets?: string[];
+      catalysts?: string[];
+      timeHorizon?: string;
+      volatility?: string;
+      summary?: string;
+      tradingNotes?: string[];
+      mode?: string;
+      assessment?: {
+        impact?: string;
+        score?: number;
+        direction?: string;
+        confidence?: number;
+        assets?: string[];
+        catalysts?: string[];
+        timeHorizon?: string;
+        volatility?: string;
+        summary?: string;
+        tradingNotes?: string[];
+        mode?: string;
+      };
+      aiUsed?: boolean;
+      aiStreaming?: boolean;
+      aiSkipped?: string;
+      requestId?: string;
+      error?: string;
+    }>;
+  };
   belugaAi: {
     getStatus: () => Promise<{
       enabled: boolean;
@@ -1239,6 +1383,137 @@ interface Window {
       messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
       pageContext?: string;
     }) => Promise<{ ok: boolean }>;
+    tradingAgentTick: (params: {
+      requestId: string;
+      sessionId: string;
+      strategyBlock: string;
+      market: string;
+      timeframe: string;
+      mode?: 'analysis' | 'demo' | 'live';
+      paperMode?: boolean;
+      userMessage?: string;
+      strategyId?: string;
+      memoryCredentials?: Array<{
+        entryId: string;
+        label: string;
+        accountId: string;
+        delegateKey: string;
+        network: 'mainnet' | 'testnet';
+        namespace: string;
+      }>;
+      stopLossPct?: number;
+      takeProfitPct?: number;
+    }) => Promise<{ ok: boolean }>;
+    tradingChartAnnotations: (params?: {
+      market?: string;
+    }) => Promise<{
+      ok: boolean;
+      annotations?: Array<{
+        id: string;
+        sessionId: string;
+        market: string;
+        time: number;
+        price: number;
+        type: 'long' | 'short' | 'swap' | 'sl' | 'tp' | 'close_long' | 'close_short';
+        label: string;
+        parentId?: string;
+        createdAt: number;
+      }>;
+    }>;
+    tradingAgentStartDemo: (params: {
+      sessionId: string;
+      initialSui?: number;
+    }) => Promise<{
+      ok: boolean;
+      equityUsd?: number;
+      demo?: unknown;
+      error?: string;
+    }>;
+    tradingAgentDemoSummary: (sessionId: string) => Promise<{
+      ok: boolean;
+      error?: string;
+      summary?: {
+        durationMin: number;
+        startingSui: number;
+        startingSpotUsd: number;
+        startingEquityUsd: number;
+        endingBalances: Record<string, number>;
+        endingEquityUsd: number;
+        pnlUsd: number;
+        pnlPct: number;
+        tradeCount: number;
+        longCount: number;
+        shortCount: number;
+        swapCount: number;
+        trades: unknown[];
+      };
+    }>;
+    tradingAgentDemoSnapshot: (sessionId: string) => Promise<{
+      ok: boolean;
+      equityUsd?: number;
+      balances?: Record<string, number>;
+      error?: string;
+    }>;
+    tradingAgentRemember: (params: {
+      sessionId: string;
+      text: string;
+      kind?: string;
+      strategyId?: string;
+      memoryCredentials?: Array<{
+        entryId: string;
+        label: string;
+        accountId: string;
+        delegateKey: string;
+        network: 'mainnet' | 'testnet';
+        namespace: string;
+      }>;
+    }) => Promise<{ text: string }>;
+    tradingMemoryAnalyze: (params: {
+      requestId: string;
+      strategyBlock: string;
+      strategyName?: string;
+      memoryCredentials: Array<{
+        entryId: string;
+        label: string;
+        accountId: string;
+        delegateKey: string;
+        network: 'mainnet' | 'testnet';
+        namespace: string;
+      }>;
+      withAiSummary?: boolean;
+    }) => Promise<{
+      ok: boolean;
+      error?: string;
+      aiStreaming?: boolean;
+      aiSkipped?: string;
+      aiSummary?: string | null;
+      report?: {
+        memoryLabel: string;
+        namespace: string;
+        network: string;
+        totalUnique: number;
+        byKind: Record<string, number>;
+        statsText: string;
+        outcomes: Array<{ kind: string; relevance: number; text: string }>;
+        mistakes: Array<{ kind: string; relevance: number; text: string }>;
+        improvements: Array<{ kind: string; relevance: number; text: string }>;
+        setups: Array<{ kind: string; relevance: number; text: string }>;
+        risk: Array<{ kind: string; relevance: number; text: string }>;
+        other: Array<{ kind: string; relevance: number; text: string }>;
+        hits: Array<{ kind: string; relevance: number; text: string }>;
+      };
+    }>;
+    tradingAgentReset: (sessionId: string) => Promise<{ ok: boolean }>;
+    tradingAgentSession: (sessionId: string) => Promise<{
+      ok: boolean;
+      plan?: string;
+      stopped?: boolean;
+      nextTickSeconds?: number | null;
+      lastAction?: string | null;
+      thoughts?: string[];
+      demoMode?: boolean;
+      demo?: { equityUsd: number; balances: Record<string, number> } | null;
+    }>;
     abort: (requestId: string) => Promise<{ ok: boolean }>;
     onStreamChunk: (
       callback: (payload: { requestId: string; delta: string }) => void,
@@ -1247,10 +1522,46 @@ interface Window {
       callback: (payload: {
         requestId: string;
         usage: { promptTokens: number; completionTokens: number } | null;
+        impactAssessment?: {
+          impact?: string;
+          score?: number;
+          direction?: string;
+          confidence?: number;
+          assets?: string[];
+          catalysts?: string[];
+          timeHorizon?: string;
+          volatility?: string;
+          summary?: string;
+          tradingNotes?: string[];
+          mode?: string;
+        };
+        tradingMeta?: {
+          sessionId: string;
+          nextTickSeconds: number | null;
+          stopped: boolean;
+          plan: string;
+          demoMode?: boolean;
+        };
       }) => void,
     ) => () => void;
     onStreamError: (
-      callback: (payload: { requestId: string; message: string }) => void,
+      callback: (payload: {
+        requestId: string;
+        message: string;
+        impactAssessment?: {
+          impact?: string;
+          score?: number;
+          direction?: string;
+          confidence?: number;
+          assets?: string[];
+          catalysts?: string[];
+          timeHorizon?: string;
+          volatility?: string;
+          summary?: string;
+          tradingNotes?: string[];
+          mode?: string;
+        };
+      }) => void,
     ) => () => void;
     onToolCall: (
       callback: (payload: {
