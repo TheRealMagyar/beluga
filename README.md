@@ -1,10 +1,28 @@
 # Beluga
 
-**An AI-native desktop hub for Sui development — projects, persistent agent memory, Move playground, packages, and MCP.**
+**AI-native desktop hub for Sui development and on-chain workflows — Walrus Memory, projects, Move/PTB/DeFi playground, packages, trading tools, and MCP.**
 
-Beluga is an Electron app that connects your local projects to AI agents through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). Agents can read and write project files, recall context from [Walrus Memory](https://memory.walrus.xyz), build and publish Move packages on localnet, install SDK bundles, run Git operations, and use Beluga's built-in Sui tools — all from one place.
+Beluga is an Electron app that ties local workspaces to AI agents through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). Agents can read and write project files, persist context in [Walrus Memory](https://memory.walrus.xyz), build and publish Move packages, run PTB drafts, deploy a DeFi sandbox, manage SDK bundles, drive Git/GitHub, and use Beluga’s Sui tooling — from one desktop app.
 
-Use Beluga as your daily driver for Sui dApp work, or point Claude Desktop, Cursor, VS Code, or any MCP client at Beluga and let an agent operate the full toolchain.
+Use Beluga as your daily Sui workspace, or point Claude Desktop, Cursor, VS Code, or any MCP client at Beluga and let an agent operate the toolchain.
+
+---
+
+## What’s inside
+
+| Area | What you get |
+|---|---|
+| **Memory** | Walrus Memory accounts, encrypted on-chain recall, MCP `remember` / `recall` / `analyze` |
+| **Projects** | Local workspaces, templates, `beluga.json` links (memories, packages, skills), Git + GitHub |
+| **Skills** | Reusable agent instruction sets; Beluga templates + bundled Walrus skills |
+| **Playground** | Move editor, **PTB** builder, **DeFi** AMM sandbox, **Ika** / dWallet localnet |
+| **Packages** | Curated Sui SDK catalog, custom npm bundles, toolchain install (Rust / suiup / Sui CLI) |
+| **Tools** | Tx visualizer, token scanner, gRPC query builder, token + NFT generators |
+| **Trading** | Charts (DeepBook + structure tools + agent), strategy editor, market feeds |
+| **AI Assistant** | Built-in Grok/xAI chat with page context and the same MCP tool catalog |
+| **Console** | Dedicated terminal window (`node-pty`) next to the GUI |
+| **Learning** | Interactive Move curriculum in-app |
+| **Wallet** | Mainnet / testnet / localnet; signs publishes, tools, and memory account flows |
 
 ---
 
@@ -23,14 +41,20 @@ Use Beluga as your daily driver for Sui dApp work, or point Claude Desktop, Curs
 
 ### Skills
 - Personal **skills library** — reusable instruction sets for agents.
-- Import from **Beluga templates** and official **Walrus skills**.
+- Import from **Beluga templates** and official **Walrus skills** (`vendor/walrus-skills`).
 - Attach skills to projects; agents load them through `project_open` and `skill_get`.
 
 ### Playground
-- In-app **Move editor** (Monaco) with build, publish, and entry-function testing.
-- **Sui localnet** lifecycle: start, stop, reset, faucet, live logs, local explorer.
-- **Ika** tab: localnet stack, dWallet creation, Ika explorer.
-- Load Move projects from the Projects manager directly into the playground.
+Four tabs (Ika appears when the toolchain is ready):
+
+| Tab | Focus |
+|---|---|
+| **Move** | Monaco editor, build, publish, entry-function testing; Sui localnet lifecycle (start / stop / reset, faucet, logs, local explorer) |
+| **PTB** | Programmable Transaction Block drafts, templates, preview, and execute — also available over MCP |
+| **DeFi** | Local **beluga_defi** sandbox (AMM pools, faucets, liquidity, swaps) for agent- and UI-driven DeFi experiments |
+| **Ika** | Ika localnet stack, dWallet creation, Ika explorer |
+
+Load Move projects from **Projects** straight into the playground.
 
 ### Packages
 - **SDK Catalog** — curated Sui ecosystem npm packages (wallet, storage, payments, tooling).
@@ -44,8 +68,15 @@ Use Beluga as your daily driver for Sui dApp work, or point Claude Desktop, Curs
 - **Token Generator** — deploy a custom coin.
 - **NFT Manager** — generative collections, Walrus media upload, contract deploy.
 
+### Trading
+Sidebar section for market work that plugs into memory and the wallet:
+
+- **Charts** — multi-symbol charts (crypto / stock / Sui / DeepBook pools), structure tools, trade panel, and a trading agent panel.
+- **Strategy** — define entry/exit rules, timeframes, risk params; optionally link a Walrus Memory for session continuity.
+- **Feeds** — news, calendar, X watchlist, impact scoring, custom RSS/JSON endpoints.
+
 ### AI Assistant
-- Built-in chat panel (Grok / xAI) with optional **page context** and **tool use** against Beluga's MCP catalog.
+- Built-in chat panel (Grok / xAI) with optional **page context** and **tool use** against Beluga’s MCP catalog.
 - Same tools external agents use — no duplicate integration work.
 
 ### Console
@@ -75,7 +106,7 @@ Or build from source — see [Development](#development) below.
 ### 2. Set up wallet and memory
 
 1. Open Beluga and **create or import a Sui wallet**. Keep a small amount of SUI for Walrus Memory account creation.
-2. Go to **Memory** and create or import a Walrus Memory account. Use a **delegate key** from the [Walrus Playground](https://memory.walrus.xyz) instead of exposing your main key to agents.
+2. Go to **Memory** and create or import a Walrus Memory account. Prefer a **delegate key** from the [Walrus Playground](https://memory.walrus.xyz) instead of exposing your main key to agents.
 3. Optionally set a **namespace** per memory (default: `default`).
 
 ### 3. Create a project
@@ -83,11 +114,11 @@ Or build from source — see [Development](#development) below.
 1. Open **Projects** → **New project**.
 2. Pick a template (e.g. **Smart contracts** for Move).
 3. Link one or more memories, package bundles, and skills.
-4. Beluga writes `beluga.json` and starter files (`WALRUS.md`, `CLAUDE.md`, etc.).
+4. Beluga writes `beluga.json` and starter agent files (`WALRUS.md`, `CLAUDE.md`, etc.).
 
 ### 4. Connect an AI agent (MCP)
 
-Beluga starts an MCP HTTP server on port **47823** when the app is running. Configure your client to connect via `mcp-remote`:
+Beluga starts an MCP HTTP server on port **47823** when the app is running. Configure your client with `mcp-remote`:
 
 **Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 
@@ -106,7 +137,7 @@ Beluga starts an MCP HTTP server on port **47823** when the app is running. Conf
 }
 ```
 
-**Cursor / VS Code** — `.cursor/mcp.json` at your project root (or global MCP config):
+**Cursor / VS Code** — `.cursor/mcp.json` (or global MCP config):
 
 ```json
 {
@@ -123,9 +154,9 @@ Beluga starts an MCP HTTP server on port **47823** when the app is running. Conf
 }
 ```
 
-> Use scoped endpoints (fewer tools, less noise) — see [MCP endpoints](#mcp-endpoints).
+> Prefer scoped endpoints when you want fewer tools — see [MCP endpoints](#mcp-endpoints).
 
-Then try: *"Open my project and recall what we decided last session."*
+Then try: *“Open my project and recall what we decided last session.”*
 
 ---
 
@@ -135,14 +166,14 @@ Then try: *"Open my project and recall what we decided last session."*
 |---|---|
 | `/mcp` | Everything (memory, projects, files, skills, Git, GitHub, playground, packages, app tools, wallet) |
 | `/mcp/core` | Projects, memory, files, skills |
-| `/mcp/playground` | Core + localnet, Move build/publish, Ika / dWallet |
+| `/mcp/playground` | Core + localnet, Move build/publish, DeFi sandbox, PTB, Ika / dWallet |
 | `/mcp/packages` | Core + SDK catalog, custom bundles, install/link |
 | `/mcp/tools` | Core + token scanner, NFT/token generator, gRPC, tx visualizer |
 | `/mcp/wallet` | Core + balance, faucet, send |
 
 Example scoped URL: `http://127.0.0.1:47823/mcp/playground`
 
-The exact URL is shown in **Settings → MCP endpoint**.
+Live URL is shown in **Settings → MCP endpoint**. Legacy SSE is also available at `/sse?set=all` (or `core` / `playground` / …).
 
 ### MCP tool groups
 
@@ -175,7 +206,7 @@ The exact URL is shown in **Settings → MCP endpoint**.
 </details>
 
 <details>
-<summary><strong>Playground</strong></summary>
+<summary><strong>Playground — Move, localnet, Ika</strong></summary>
 
 | Tool | Description |
 |---|---|
@@ -183,8 +214,34 @@ The exact URL is shown in **Settings → MCP endpoint**.
 | `playground_build` / `playground_publish` | Move compile and publish |
 | `playground_start_sui_localnet` / `playground_stop_sui_localnet` / `playground_reset_sui_localnet` | Sui localnet |
 | `playground_request_faucet` / `playground_get_localnet_logs` / `playground_get_localnet_overview` | Faucet and explorer data |
+| `playground_list_wallets` / `playground_get_wallet_assets` | Playground wallets |
 | `playground_start_ika_localnet` / `playground_stop_ika_localnet` / `playground_start_ika_stack` / … | Ika stack |
 | `playground_create_dwallet` / `playground_list_dwallets` / `playground_get_ika_explorer` | dWallet and Ika explorer |
+
+</details>
+
+<details>
+<summary><strong>Playground — DeFi sandbox</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `playground_defi_deploy_sandbox` | Build/publish beluga_defi (AMM + faucets); localnet/testnet |
+| `playground_defi_get_deployment` | Current sandbox deployment |
+| `playground_defi_create_pool` / `playground_defi_list_pools` / `playground_defi_set_active_pool` | Pool management |
+| `playground_defi_faucet` | Mint sandbox coins |
+| `playground_defi_add_liquidity` / `playground_defi_swap` | Liquidity and swaps |
+| `playground_defi_get_pool_snapshot` | Pool state snapshot |
+
+</details>
+
+<details>
+<summary><strong>Playground — PTB</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `playground_ptb_get_draft` / `playground_ptb_set_draft` | Read/write PTB draft |
+| `playground_ptb_list_templates` / `playground_ptb_load_template` | Templates |
+| `playground_ptb_preview` / `playground_ptb_execute` | Dry-run and execute |
 
 </details>
 
@@ -347,10 +404,10 @@ Then restart localnet from **Playground**.
 │  └──────────┘  └──────────┘  └──────────┘  └──────┬──────┘ │
 └───────────────────────────────────────────────────│─────────┘
                                                     │
-                    ┌───────────────────────────────┼───────────────┐
-                    ▼                               ▼               ▼
-             Claude / Cursor                   Walrus Memory    Sui / Ika
-             VS Code / agents                  (on-chain)       localnet
+        ┌───────────────────┬───────────────────────┼───────────────┐
+        ▼                   ▼                       ▼               ▼
+ Claude / Cursor      Walrus Memory           Sui / Ika        DeepBook /
+ VS Code / agents     (on-chain)              localnet         markets
 ```
 
 ---
@@ -358,9 +415,9 @@ Then restart localnet from **Playground**.
 ## Tech stack
 
 - **Electron** 42 + **Vite** + **React** 19 + **TypeScript**
-- **Tailwind CSS** 4, **Monaco Editor**, **xterm.js**
-- **@mysten/sui**, **@mysten/walrus**, **@mysten/dapp-kit**, **@ika.xyz/sdk**
-- **@modelcontextprotocol/sdk** for the MCP server
+- **Tailwind CSS** 4, **Monaco Editor**, **xterm.js**, **lightweight-charts**
+- **@mysten/sui**, **@mysten/walrus**, **@mysten/dapp-kit**, **@mysten/deepbook-v3**, **@mysten-incubation/memwal**
+- **@ika.xyz/sdk**, **@modelcontextprotocol/sdk**
 - **node-pty** for the integrated console
 
 ---
@@ -376,4 +433,5 @@ MIT — see [package.json](./package.json).
 - [Walrus Memory](https://memory.walrus.xyz)
 - [Sui Documentation](https://docs.sui.io)
 - [Model Context Protocol](https://modelcontextprotocol.io)
+- [DeepBook](https://docs.sui.io/standards/deepbook)
 - [Releases](https://github.com/TheRealMagyar/beluga/releases)
